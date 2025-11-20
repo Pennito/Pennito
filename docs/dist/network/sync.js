@@ -291,6 +291,31 @@ export class DatabaseSync {
             return [];
         }
     }
+    // Broadcast global message to all active players
+    async broadcastGlobalMessage(message) {
+        try {
+            const supabase = await getSupabaseClient();
+            if (!supabase) {
+                console.warn('[BROADCAST] Supabase not available');
+                return;
+            }
+            // Use Supabase Realtime to broadcast message
+            const channel = supabase.channel('global-updates');
+            await channel.subscribe(async (status) => {
+                if (status === 'SUBSCRIBED') {
+                    await channel.send({
+                        type: 'broadcast',
+                        event: 'global_message',
+                        payload: { message: message, timestamp: Date.now() }
+                    });
+                    console.log('[BROADCAST] Global message sent:', message);
+                }
+            });
+        }
+        catch (error) {
+            console.error('[BROADCAST] Error broadcasting message:', error);
+        }
+    }
     // Delete ALL data from database (for automatic version reset ONLY)
     // This function is only called during automatic version updates
     // It cannot be called manually from console for security

@@ -141,19 +141,30 @@ async function checkVersionReset() {
     const storedVersion = localStorage.getItem(STORAGE_KEY);
     if (storedVersion !== GAME_VERSION) {
         console.log(`[AUTO-RESET] Version changed: ${storedVersion} → ${GAME_VERSION}`);
-        console.log('[AUTO-RESET] Performing automatic full database reset...');
+        console.log('[AUTO-RESET] Broadcasting update message and performing reset...');
         try {
             const dbSync = DatabaseSync.getInstance();
+            // First, broadcast global update message to all active players
+            await dbSync.broadcastGlobalMessage('{Global Message ; game updating}');
+            // Wait a moment for message to be received
+            await new Promise(resolve => setTimeout(resolve, 2000));
+            // Then clear all data
             await dbSync.deleteAllWorlds();
             console.log('[AUTO-RESET] ✅ All data cleared!');
             // Store new version
             localStorage.setItem(STORAGE_KEY, GAME_VERSION);
             console.log(`[AUTO-RESET] Version ${GAME_VERSION} stored`);
+            // Force logout and refresh
+            console.log('[AUTO-RESET] Forcing page refresh...');
+            alert('Game is updating! Please refresh the page.');
+            window.location.reload();
         }
         catch (error) {
             console.error('[AUTO-RESET] Error during automatic reset:', error);
             // Still store version to prevent infinite loops
             localStorage.setItem(STORAGE_KEY, GAME_VERSION);
+            // Force refresh anyway
+            window.location.reload();
         }
     }
     else {

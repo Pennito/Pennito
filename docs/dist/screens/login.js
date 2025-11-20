@@ -13,6 +13,9 @@ export class LoginScreen {
         this.statusMessages = []; // Queue of status messages to show
         this.currentStatusIndex = 0;
         this.statusAnimationTimer = 0;
+        this.usernameInput = null;
+        this.passwordInput = null;
+        this.isMobile = false;
         try {
             this.canvas = canvas;
             this.ctx = canvas.getContext('2d');
@@ -20,18 +23,159 @@ export class LoginScreen {
                 throw new Error('Could not get 2d context from canvas');
             }
             this.onLoginSuccess = onLoginSuccess;
+            // Detect mobile
+            this.isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
+                (window.innerWidth <= 768 && 'ontouchstart' in window);
             // No auto-login - user must login each session (for multiplayer sync)
             this.setupInput();
+            if (this.isMobile) {
+                this.createMobileInputs();
+            }
         }
         catch (error) {
             console.error('Error initializing LoginScreen:', error);
             throw error;
         }
     }
+    createMobileInputs() {
+        const canvasRect = this.canvas.getBoundingClientRect();
+        const centerX = CANVAS_WIDTH / 2;
+        const centerY = CANVAS_HEIGHT / 2;
+        // Username input
+        this.usernameInput = document.createElement('input');
+        this.usernameInput.type = 'text';
+        this.usernameInput.placeholder = 'Username';
+        this.usernameInput.autocomplete = 'username';
+        this.usernameInput.inputMode = 'text';
+        this.usernameInput.style.cssText = `
+      position: fixed;
+      left: ${canvasRect.left + centerX - 200}px;
+      top: ${canvasRect.top + centerY - 100}px;
+      width: 400px;
+      height: 40px;
+      font-size: 20px;
+      font-family: monospace;
+      padding: 0 10px;
+      border: 3px solid #5C6BC0;
+      border-radius: 0;
+      background: #FFFFFF;
+      color: #212121;
+      z-index: 1000;
+      box-sizing: border-box;
+      touch-action: manipulation;
+    `;
+        this.usernameInput.addEventListener('input', (e) => {
+            const target = e.target;
+            // Only allow alphanumeric
+            const value = target.value.replace(/[^a-zA-Z0-9]/g, '');
+            if (value.length <= 12) {
+                this.username = value;
+                target.value = value;
+            }
+            else {
+                target.value = this.username;
+            }
+        });
+        this.usernameInput.addEventListener('focus', () => {
+            this.selectedField = 'username';
+        });
+        document.body.appendChild(this.usernameInput);
+        // Password input
+        this.passwordInput = document.createElement('input');
+        this.passwordInput.type = 'password';
+        this.passwordInput.placeholder = 'Password';
+        this.passwordInput.autocomplete = 'current-password';
+        this.passwordInput.inputMode = 'text';
+        this.passwordInput.style.cssText = `
+      position: fixed;
+      left: ${canvasRect.left + centerX - 200}px;
+      top: ${canvasRect.top + centerY - 40}px;
+      width: 400px;
+      height: 40px;
+      font-size: 20px;
+      font-family: monospace;
+      padding: 0 10px;
+      border: 3px solid #9E9E9E;
+      border-radius: 0;
+      background: #FFFFFF;
+      color: #212121;
+      z-index: 1000;
+      box-sizing: border-box;
+      touch-action: manipulation;
+    `;
+        this.passwordInput.addEventListener('input', (e) => {
+            const target = e.target;
+            if (target.value.length <= 30) {
+                this.password = target.value;
+            }
+            else {
+                target.value = this.password;
+            }
+        });
+        this.passwordInput.addEventListener('focus', () => {
+            this.selectedField = 'password';
+        });
+        this.passwordInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                this.submit();
+            }
+        });
+        document.body.appendChild(this.passwordInput);
+        // Update input visibility based on selected field
+        this.updateMobileInputs();
+    }
+    updateMobileInputPositions() {
+        if (!this.isMobile || !this.usernameInput || !this.passwordInput)
+            return;
+        const canvasRect = this.canvas.getBoundingClientRect();
+        const centerX = CANVAS_WIDTH / 2;
+        const centerY = CANVAS_HEIGHT / 2;
+        this.usernameInput.style.left = `${canvasRect.left + centerX - 200}px`;
+        this.usernameInput.style.top = `${canvasRect.top + centerY - 100}px`;
+        this.passwordInput.style.left = `${canvasRect.left + centerX - 200}px`;
+        this.passwordInput.style.top = `${canvasRect.top + centerY - 40}px`;
+    }
+    updateMobileInputs() {
+        if (!this.isMobile || !this.usernameInput || !this.passwordInput)
+            return;
+        if (this.selectedField === 'username') {
+            this.usernameInput.style.border = '3px solid #5C6BC0';
+            this.passwordInput.style.border = '2px solid #9E9E9E';
+        }
+        else if (this.selectedField === 'password') {
+            this.usernameInput.style.border = '2px solid #9E9E9E';
+            this.passwordInput.style.border = '3px solid #5C6BC0';
+        }
+        // Sync values
+        if (this.usernameInput.value !== this.username) {
+            this.usernameInput.value = this.username;
+        }
+        // Don't sync password for security
+    }
     setupInput() {
         window.addEventListener('keydown', (e) => this.handleKeyDown(e));
     }
     handleKeyDown(e) {
+        // On mobile, let the HTML inputs handle input
+        if (this.isMobile) {
+            if (e.key === 'Tab') {
+                e.preventDefault();
+                this.selectedField = this.selectedField === 'username' ? 'password' : 'username';
+                if (this.selectedField === 'username' && this.usernameInput) {
+                    this.usernameInput.focus();
+                }
+                else if (this.selectedField === 'password' && this.passwordInput) {
+                    this.passwordInput.focus();
+                }
+                this.updateMobileInputs();
+                this.errorMessage = '';
+                return;
+            }
+            // Let HTML inputs handle other keys on mobile
+            return;
+        }
+        // Desktop keyboard handling
         if (e.key === 'Tab') {
             e.preventDefault();
             this.selectedField = this.selectedField === 'username' ? 'password' : 'username';
@@ -186,11 +330,19 @@ export class LoginScreen {
         // Username field
         if (x >= centerX - 200 && x <= centerX + 200 && y >= centerY - 100 && y <= centerY - 60) {
             this.selectedField = 'username';
+            if (this.isMobile && this.usernameInput) {
+                this.usernameInput.focus();
+            }
+            this.updateMobileInputs();
             return;
         }
         // Password field
         if (x >= centerX - 200 && x <= centerX + 200 && y >= centerY - 40 && y <= centerY) {
             this.selectedField = 'password';
+            if (this.isMobile && this.passwordInput) {
+                this.passwordInput.focus();
+            }
+            this.updateMobileInputs();
             return;
         }
         // Login button
@@ -214,6 +366,10 @@ export class LoginScreen {
     }
     render() {
         try {
+            // Update mobile input positions if canvas moved
+            if (this.isMobile) {
+                this.updateMobileInputPositions();
+            }
             // Clear canvas with light gradient background
             const gradient = this.ctx.createLinearGradient(0, 0, 0, CANVAS_HEIGHT);
             gradient.addColorStop(0, '#E3F2FD'); // Very light blue
@@ -227,46 +383,50 @@ export class LoginScreen {
             this.ctx.font = 'bold 48px monospace';
             this.ctx.textAlign = 'center';
             this.ctx.fillText('IPenno', centerX, centerY - 200);
-            // Username field
-            const isUsernameFocused = this.selectedField === 'username';
-            // Background with glow effect when focused
-            if (isUsernameFocused) {
-                // Glow effect
-                this.ctx.fillStyle = 'rgba(92, 107, 192, 0.2)';
-                this.ctx.fillRect(centerX - 205, centerY - 105, 410, 50);
+            // Username field (only render on desktop, mobile uses HTML inputs)
+            if (!this.isMobile) {
+                const isUsernameFocused = this.selectedField === 'username';
+                // Background with glow effect when focused
+                if (isUsernameFocused) {
+                    // Glow effect
+                    this.ctx.fillStyle = 'rgba(92, 107, 192, 0.2)';
+                    this.ctx.fillRect(centerX - 205, centerY - 105, 410, 50);
+                }
+                this.ctx.fillStyle = '#FFFFFF';
+                this.ctx.fillRect(centerX - 200, centerY - 100, 400, 40);
+                // Border with indigo color when focused
+                this.ctx.strokeStyle = isUsernameFocused ? '#5C6BC0' : '#9E9E9E';
+                this.ctx.lineWidth = isUsernameFocused ? 3 : 2;
+                this.ctx.strokeRect(centerX - 200, centerY - 100, 400, 40);
+                // Text
+                this.ctx.font = '20px monospace';
+                this.ctx.textAlign = 'left';
+                const usernameText = this.username || 'Username';
+                this.ctx.fillStyle = this.username ? '#212121' : '#9E9E9E';
+                this.ctx.fillText(usernameText, centerX - 190, centerY - 70);
             }
-            this.ctx.fillStyle = '#FFFFFF';
-            this.ctx.fillRect(centerX - 200, centerY - 100, 400, 40);
-            // Border with indigo color when focused
-            this.ctx.strokeStyle = isUsernameFocused ? '#5C6BC0' : '#9E9E9E';
-            this.ctx.lineWidth = isUsernameFocused ? 3 : 2;
-            this.ctx.strokeRect(centerX - 200, centerY - 100, 400, 40);
-            // Text
-            this.ctx.font = '20px monospace';
-            this.ctx.textAlign = 'left';
-            const usernameText = this.username || 'Username';
-            this.ctx.fillStyle = this.username ? '#212121' : '#9E9E9E';
-            this.ctx.fillText(usernameText, centerX - 190, centerY - 70);
-            // Password field
-            const isPasswordFocused = this.selectedField === 'password';
-            // Background with glow effect when focused
-            if (isPasswordFocused) {
-                // Glow effect
-                this.ctx.fillStyle = 'rgba(92, 107, 192, 0.2)';
-                this.ctx.fillRect(centerX - 205, centerY - 45, 410, 50);
+            // Password field (only render on desktop, mobile uses HTML inputs)
+            if (!this.isMobile) {
+                const isPasswordFocused = this.selectedField === 'password';
+                // Background with glow effect when focused
+                if (isPasswordFocused) {
+                    // Glow effect
+                    this.ctx.fillStyle = 'rgba(92, 107, 192, 0.2)';
+                    this.ctx.fillRect(centerX - 205, centerY - 45, 410, 50);
+                }
+                this.ctx.fillStyle = '#FFFFFF';
+                this.ctx.fillRect(centerX - 200, centerY - 40, 400, 40);
+                // Border with indigo color when focused
+                this.ctx.strokeStyle = isPasswordFocused ? '#5C6BC0' : '#9E9E9E';
+                this.ctx.lineWidth = isPasswordFocused ? 3 : 2;
+                this.ctx.strokeRect(centerX - 200, centerY - 40, 400, 40);
+                // Password text (dots)
+                this.ctx.font = '20px monospace';
+                this.ctx.textAlign = 'left';
+                const passwordText = this.password ? '●'.repeat(this.password.length) : 'Password';
+                this.ctx.fillStyle = this.password ? '#212121' : '#9E9E9E';
+                this.ctx.fillText(passwordText, centerX - 190, centerY - 10);
             }
-            this.ctx.fillStyle = '#FFFFFF';
-            this.ctx.fillRect(centerX - 200, centerY - 40, 400, 40);
-            // Border with indigo color when focused
-            this.ctx.strokeStyle = isPasswordFocused ? '#5C6BC0' : '#9E9E9E';
-            this.ctx.lineWidth = isPasswordFocused ? 3 : 2;
-            this.ctx.strokeRect(centerX - 200, centerY - 40, 400, 40);
-            // Password text (dots)
-            this.ctx.font = '20px monospace';
-            this.ctx.textAlign = 'left';
-            const passwordText = this.password ? '●'.repeat(this.password.length) : 'Password';
-            this.ctx.fillStyle = this.password ? '#212121' : '#9E9E9E';
-            this.ctx.fillText(passwordText, centerX - 190, centerY - 10);
             // Connection status message (Growtopia-style) - Show in a chat-like box
             if (this.connectionStatus !== 'idle' && this.statusMessage) {
                 // Chat box background
@@ -352,7 +512,15 @@ export class LoginScreen {
     }
     // Reset function removed - only automatic reset on version updates
     cleanup() {
-        // Remove event listeners if needed
+        // Remove mobile input elements
+        if (this.usernameInput) {
+            this.usernameInput.remove();
+            this.usernameInput = null;
+        }
+        if (this.passwordInput) {
+            this.passwordInput.remove();
+            this.passwordInput = null;
+        }
     }
 }
 //# sourceMappingURL=login.js.map

@@ -19,6 +19,10 @@
             background: #E8EAF6; /* Light indigo-gray background */
             font-family: 'Courier New', monospace;
             overflow: hidden;
+            touch-action: none;
+            -webkit-touch-callout: none;
+            -webkit-user-select: none;
+            user-select: none;
         }
         
         #gameCanvas {
@@ -46,7 +50,7 @@
 <body>
     <canvas id="gameCanvas"></canvas>
     <div id="ui-overlay"></div>
-    <script type="module" src="./dist/main.js?v=1.0.1"></script>
+    <script type="module" src="./dist/main.js?v=1.0.2"></script>
 </body>
 </html>
 

@@ -28,7 +28,12 @@ export declare class GameScreen {
     private chatInput;
     private isChatOpen;
     private lastInventoryClick;
+    private multiplayer;
+    private otherPlayers;
+    private lastPositionBroadcast;
     constructor(canvas: HTMLCanvasElement, username: string, worldName: string, isNew: boolean, onExit: () => void);
+    private initializeMultiplayer;
+    private listenForGlobalUpdates;
     private loadWorld;
     private saveWorld;
     update(deltaTime: number): void;
@@ -48,6 +53,7 @@ export declare class GameScreen {
     private renderSignEditModal;
     private addChatMessage;
     private renderChat;
+    private renderOtherPlayer;
     cleanup(): Promise<void>;
 }
 //# sourceMappingURL=game.d.ts.map

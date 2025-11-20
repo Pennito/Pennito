@@ -18,7 +18,13 @@ export declare class LoginScreen {
     private statusMessages;
     private currentStatusIndex;
     private statusAnimationTimer;
+    private usernameInput;
+    private passwordInput;
+    private isMobile;
     constructor(canvas: HTMLCanvasElement, onLoginSuccess: (username: string) => void);
+    private createMobileInputs;
+    private updateMobileInputPositions;
+    private updateMobileInputs;
     private setupInput;
     private handleKeyDown;
     private submit;

@@ -46,6 +46,7 @@ export interface PlayerData {
     equippedWings?: TileType | null;
     maxInventorySlots?: number;
     gems?: number;
+    username?: string;
 }
 export interface SignData {
     x: number;

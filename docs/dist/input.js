@@ -1,14 +1,19 @@
+import { MobileControls } from './utils/mobile.js';
 export class InputManager {
     constructor(canvas) {
         this.keys = new Set();
         this.mouseButtons = new Set();
+        this.touchButtons = new Set(); // Track touch buttons
         this.mouseX = 0;
         this.mouseY = 0;
         this.mouseWorldX = 0;
         this.mouseWorldY = 0;
+        this.mobileControls = null;
         this.keyPresses = new Set(); // Track key presses (not held)
         this.lastJumpPress = 0;
         this.spacePressed = false;
+        // Initialize mobile controls if on mobile
+        this.mobileControls = new MobileControls(canvas);
         window.addEventListener('keydown', (e) => {
             const key = e.key.toLowerCase();
             this.keys.add(key);
@@ -63,6 +68,36 @@ export class InputManager {
         canvas.addEventListener('contextmenu', (e) => {
             e.preventDefault();
         });
+        // Touch events for mobile
+        canvas.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            const touch = e.touches[0];
+            const rect = canvas.getBoundingClientRect();
+            this.mouseX = touch.clientX - rect.left;
+            this.mouseY = touch.clientY - rect.top;
+            // Left click (0) for touch
+            this.touchButtons.add(0);
+            this.mouseButtons.add(0);
+        }, { passive: false });
+        canvas.addEventListener('touchmove', (e) => {
+            e.preventDefault();
+            if (e.touches.length > 0) {
+                const touch = e.touches[0];
+                const rect = canvas.getBoundingClientRect();
+                this.mouseX = touch.clientX - rect.left;
+                this.mouseY = touch.clientY - rect.top;
+            }
+        }, { passive: false });
+        canvas.addEventListener('touchend', (e) => {
+            e.preventDefault();
+            this.touchButtons.delete(0);
+            this.mouseButtons.delete(0);
+        }, { passive: false });
+        canvas.addEventListener('touchcancel', (e) => {
+            e.preventDefault();
+            this.touchButtons.delete(0);
+            this.mouseButtons.delete(0);
+        }, { passive: false });
     }
     updateMousePosition(e, canvas) {
         const rect = canvas.getBoundingClientRect();
@@ -74,7 +109,20 @@ export class InputManager {
         this.mouseWorldY = this.mouseY + cameraY;
     }
     isKeyPressed(key) {
-        return this.keys.has(key.toLowerCase());
+        const keyLower = key.toLowerCase();
+        // Check mobile controls for movement
+        if (this.mobileControls) {
+            if (keyLower === 'a' || keyLower === 'arrowleft') {
+                return this.keys.has(keyLower) || this.mobileControls.isLeftHeld();
+            }
+            if (keyLower === 'd' || keyLower === 'arrowright') {
+                return this.keys.has(keyLower) || this.mobileControls.isRightHeld();
+            }
+            if (keyLower === ' ' || keyLower === 'w' || keyLower === 'arrowup') {
+                return this.keys.has(keyLower) || this.mobileControls.isJumpHeld();
+            }
+        }
+        return this.keys.has(keyLower);
     }
     wasKeyJustPressed(key) {
         const pressed = this.keyPresses.has(key.toLowerCase());

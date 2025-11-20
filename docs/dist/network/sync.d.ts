@@ -22,6 +22,7 @@ export declare class DatabaseSync {
     loadInventory(userId: string): Promise<Item[] | null>;
     forceSync(worldName: string, worldData: WorldData): Promise<void>;
     getRecentWorlds(limit?: number): Promise<string[]>;
+    broadcastGlobalMessage(message: string): Promise<void>;
     deleteAllWorlds(): Promise<void>;
 }
 //# sourceMappingURL=sync.d.ts.map

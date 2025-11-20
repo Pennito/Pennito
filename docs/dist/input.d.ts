@@ -1,10 +1,13 @@
+import { MobileControls } from './utils/mobile.js';
 export declare class InputManager {
     private keys;
     private mouseButtons;
+    private touchButtons;
     mouseX: number;
     mouseY: number;
     mouseWorldX: number;
     mouseWorldY: number;
+    mobileControls: MobileControls | null;
     private keyPresses;
     private lastJumpPress;
     private spacePressed;
