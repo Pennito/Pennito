@@ -1,0 +1,46 @@
+import { TileType, Item, PlayerData } from './utils/types.js';
+import { World } from './world.js';
+export declare class Player {
+    x: number;
+    y: number;
+    velocityX: number;
+    velocityY: number;
+    width: number;
+    height: number;
+    onGround: boolean;
+    inventory: Item[];
+    selectedSlot: number;
+    username: string;
+    gems: number;
+    redeemedCodes: string[];
+    equippedShoes: TileType | null;
+    equippedHat: TileType | null;
+    equippedPants: TileType | null;
+    equippedShirt: TileType | null;
+    equippedWings: TileType | null;
+    maxInventorySlots: number;
+    private animationFrame;
+    private lastMoveTime;
+    private isMoving;
+    private jumpCount;
+    private doubleJumpCooldown;
+    private lastCooldownUpdate;
+    private readonly DOUBLE_JUMP_COOLDOWN_MS;
+    constructor(x: number, y: number, username?: string);
+    private initializeInventory;
+    private prevJumpHeld;
+    private lastJumpTime;
+    private getCurrentMoveSpeed;
+    update(world: World, moveLeft: boolean, moveRight: boolean, jumpHeld: boolean): void;
+    private checkOnGround;
+    private checkCollision;
+    getSelectedItem(): Item | null;
+    addToInventory(tileType: TileType, count?: number): void;
+    useFromInventory(tileType: TileType): boolean;
+    getInventoryExpansionCost(): number;
+    expandInventory(): boolean;
+    render(ctx: CanvasRenderingContext2D, cameraX: number, cameraY: number, worldOwner?: string | null): void;
+    getPlayerData(): PlayerData;
+    loadPlayerData(data: PlayerData): void;
+}
+//# sourceMappingURL=player.d.ts.map

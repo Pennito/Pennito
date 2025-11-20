@@ -1,0 +1,1 @@
+{"version":3,"file":"save.d.ts","sourceRoot":"","sources":["../src/save.ts"],"names":[],"mappings":"AAAA,OAAO,EAAE,SAAS,EAAE,MAAM,kBAAkB,CAAC;AAI7C,qBAAa,WAAW;IACf,IAAI,CAAC,SAAS,EAAE,SAAS,GAAG,IAAI;IAUhC,IAAI,IAAI,SAAS,GAAG,IAAI;IAexB,OAAO,IAAI,OAAO;IAIlB,UAAU,IAAI,IAAI;CAI1B"}
