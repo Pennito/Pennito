@@ -53,6 +53,13 @@ export interface SignData {
     y: number;
     text: string;
 }
+export interface DroppedItemData {
+    x: number;
+    y: number;
+    tileType: TileType;
+    gemValue?: number;
+    spawnTime: number;
+}
 export interface WorldData {
     tiles: Tile[][];
     width: number;
@@ -62,6 +69,7 @@ export interface WorldData {
     spawnX?: number;
     spawnY?: number;
     signs?: SignData[];
+    droppedItems?: DroppedItemData[];
 }
 export interface GameState {
     world: WorldData;

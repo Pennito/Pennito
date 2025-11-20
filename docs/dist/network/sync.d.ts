@@ -22,6 +22,8 @@ export declare class DatabaseSync {
     loadInventory(userId: string): Promise<Item[] | null>;
     forceSync(worldName: string, worldData: WorldData): Promise<void>;
     getRecentWorlds(limit?: number): Promise<string[]>;
+    setGameVersion(version: string): Promise<void>;
+    getGameVersion(): Promise<string | null>;
     broadcastGlobalMessage(message: string): Promise<void>;
     deleteAllWorlds(): Promise<void>;
 }

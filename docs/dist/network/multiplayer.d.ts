@@ -39,7 +39,14 @@ export declare class MultiplayerSync {
     private lastWorldBroadcastTime;
     broadcastWorldUpdate(worldData: any): Promise<void>;
     setWorldUpdateCallback(callback: (worldData: any) => void): void;
+    broadcastBlockChange(x: number, y: number, tileType: number, action: 'break' | 'place'): Promise<void>;
+    broadcastDroppedItem(x: number, y: number, tileType: number, gemValue?: number): Promise<void>;
+    private blockChangeCallback;
+    private droppedItemCallback;
+    setBlockChangeCallback(callback: (x: number, y: number, tileType: number, action: 'break' | 'place') => void): void;
+    setDroppedItemCallback(callback: (x: number, y: number, tileType: number, gemValue?: number) => void): void;
     getOtherPlayers(): OtherPlayer[];
+    cleanupDisconnectedPlayers(): Promise<void>;
     leaveWorld(): Promise<void>;
 }
 //# sourceMappingURL=multiplayer.d.ts.map

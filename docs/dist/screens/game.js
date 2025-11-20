@@ -489,6 +489,10 @@ export class GameScreen {
             this.multiplayer.broadcastPosition(this.player.x, this.player.y, playerData);
             this.lastPositionBroadcast = now;
         }
+        // Periodically cleanup disconnected players (every 5 seconds)
+        if (this.multiplayer && now % 5000 < 100) {
+            this.multiplayer.cleanupDisconnectedPlayers().catch(console.error);
+        }
         // Check for item pickup
         this.droppedItems = this.droppedItems.filter(item => {
             if (item.shouldPickup(this.player.x, this.player.y, this.player.width, this.player.height)) {
@@ -574,15 +578,27 @@ export class GameScreen {
                                 const worldData = this.world.getWorldData();
                                 this.dbSync.syncWorldImmediately(this.worldName, worldData);
                             }
+                            // Broadcast block break instantly (fire-and-forget)
+                            if (this.multiplayer) {
+                                this.multiplayer.broadcastBlockChange(mouseTile.x, mouseTile.y, TileType.AIR, 'break').catch(console.error);
+                            }
                             // Drop block item at the broken block location
                             const dropX = mouseTile.x * TILE_SIZE;
                             const dropY = mouseTile.y * TILE_SIZE;
                             this.droppedItems.push(new DroppedItem(dropX, dropY, brokenTileType));
+                            // Broadcast dropped item (fire-and-forget)
+                            if (this.multiplayer) {
+                                this.multiplayer.broadcastDroppedItem(dropX, dropY, brokenTileType).catch(console.error);
+                            }
                             // Drop 1-5 gems randomly when breaking any block
                             const gemCount = Math.floor(Math.random() * 5) + 1; // 1-5 gems
                             const gemX = dropX + (Math.random() - 0.5) * 20; // Slight random offset
                             const gemY = dropY + (Math.random() - 0.5) * 20;
                             this.droppedItems.push(new DroppedItem(gemX, gemY, TileType.GEM, gemCount));
+                            // Broadcast gem drop (fire-and-forget)
+                            if (this.multiplayer) {
+                                this.multiplayer.broadcastDroppedItem(gemX, gemY, TileType.GEM, gemCount).catch(console.error);
+                            }
                             this.breakingTile = null;
                             this.saveWorld();
                         }
@@ -640,11 +656,15 @@ export class GameScreen {
                         console.log(`[PLACE] Attempting to place ${TileType[selectedItem.tileType]} at (${mouseTile.x}, ${mouseTile.y})`);
                         // Place block first
                         this.world.setTile(mouseTile.x, mouseTile.y, selectedItem.tileType);
+                        // Broadcast block placement instantly (fire-and-forget)
+                        if (this.multiplayer) {
+                            this.multiplayer.broadcastBlockChange(mouseTile.x, mouseTile.y, selectedItem.tileType, 'place').catch(console.error);
+                        }
                         // Verify it was actually placed by checking the tile
                         const placedTile = this.world.getTile(mouseTile.x, mouseTile.y);
                         if (placedTile && placedTile.type === selectedItem.tileType) {
-                            // Block was successfully placed, now remove from inventory
-                            this.player.useFromInventory(selectedItem.tileType);
+                            // Block was successfully placed
+                            // Note: useFromInventory was already called before setTile
                             // If gold lock was placed, set world ownership
                             if (selectedItem.tileType === TileType.GOLD_LOCK) {
                                 this.world.setOwner(this.player.username);
@@ -719,11 +739,15 @@ export class GameScreen {
                         console.log(`[PLACE-RIGHT] Attempting to place ${TileType[selectedItem.tileType]}`);
                         // Place block first
                         this.world.setTile(mouseTile.x, mouseTile.y, selectedItem.tileType);
+                        // Broadcast block placement instantly (fire-and-forget)
+                        if (this.multiplayer) {
+                            this.multiplayer.broadcastBlockChange(mouseTile.x, mouseTile.y, selectedItem.tileType, 'place').catch(console.error);
+                        }
                         // Verify it was actually placed by checking the tile
                         const placedTile = this.world.getTile(mouseTile.x, mouseTile.y);
                         if (placedTile && placedTile.type === selectedItem.tileType) {
-                            // Block was successfully placed, now remove from inventory
-                            this.player.useFromInventory(selectedItem.tileType);
+                            // Block was successfully placed
+                            // Note: useFromInventory was already called before setTile
                             // If gold lock was placed, set world ownership
                             if (selectedItem.tileType === TileType.GOLD_LOCK) {
                                 this.world.setOwner(this.player.username);

@@ -23,9 +23,18 @@ export class LoginScreen {
                 throw new Error('Could not get 2d context from canvas');
             }
             this.onLoginSuccess = onLoginSuccess;
-            // Detect mobile
-            this.isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
-                (window.innerWidth <= 768 && 'ontouchstart' in window);
+            // Detect mobile - improved iOS detection
+            const ua = navigator.userAgent.toLowerCase();
+            const isIOS = /iphone|ipad|ipod/.test(ua);
+            const isAndroid = /android/.test(ua);
+            const isMobileDevice = isIOS || isAndroid || /webos|blackberry|iemobile|operamini/.test(ua);
+            const hasTouch = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+            const isSmallScreen = window.innerWidth <= 768;
+            this.isMobile = isMobileDevice || (hasTouch && isSmallScreen);
+            // Special handling for iOS
+            if (isIOS) {
+                console.log('[MOBILE] iOS device detected - enabling iOS-specific fixes');
+            }
             // No auto-login - user must login each session (for multiplayer sync)
             this.setupInput();
             if (this.isMobile) {
@@ -41,29 +50,47 @@ export class LoginScreen {
         const canvasRect = this.canvas.getBoundingClientRect();
         const centerX = CANVAS_WIDTH / 2;
         const centerY = CANVAS_HEIGHT / 2;
-        // Username input
+        const isIOS = /iphone|ipad|ipod/.test(navigator.userAgent.toLowerCase());
+        // Username input - iOS optimized
         this.usernameInput = document.createElement('input');
         this.usernameInput.type = 'text';
         this.usernameInput.placeholder = 'Username';
         this.usernameInput.autocomplete = 'username';
         this.usernameInput.inputMode = 'text';
+        this.usernameInput.autocapitalize = 'none'; // iOS: prevent auto-capitalization
+        this.usernameInput.autocorrect = 'off'; // iOS: disable autocorrect
+        this.usernameInput.spellcheck = false; // Disable spellcheck
         this.usernameInput.style.cssText = `
       position: fixed;
       left: ${canvasRect.left + centerX - 200}px;
       top: ${canvasRect.top + centerY - 100}px;
       width: 400px;
-      height: 40px;
+      height: ${isIOS ? '44px' : '40px'};
       font-size: 20px;
       font-family: monospace;
-      padding: 0 10px;
+      padding: ${isIOS ? '0 12px' : '0 10px'};
       border: 3px solid #5C6BC0;
       border-radius: 0;
       background: #FFFFFF;
       color: #212121;
-      z-index: 1000;
+      z-index: 10000;
       box-sizing: border-box;
       touch-action: manipulation;
+      -webkit-appearance: none;
+      -webkit-tap-highlight-color: transparent;
+      -webkit-user-select: text;
+      user-select: text;
+      font-size: 16px;
+      line-height: ${isIOS ? '44px' : '40px'};
     `;
+        // iOS-specific: Force focus on tap
+        this.usernameInput.addEventListener('touchstart', (e) => {
+            e.stopPropagation();
+            setTimeout(() => {
+                this.usernameInput.focus();
+                this.usernameInput.click();
+            }, 0);
+        }, { passive: true });
         this.usernameInput.addEventListener('input', (e) => {
             const target = e.target;
             // Only allow alphanumeric
@@ -78,31 +105,61 @@ export class LoginScreen {
         });
         this.usernameInput.addEventListener('focus', () => {
             this.selectedField = 'username';
+            // iOS: Scroll input into view
+            if (isIOS) {
+                setTimeout(() => {
+                    this.usernameInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }, 300);
+            }
+        });
+        // iOS: Prevent zoom on focus
+        this.usernameInput.addEventListener('focus', () => {
+            const viewport = document.querySelector('meta[name=viewport]');
+            if (viewport && isIOS) {
+                viewport.setAttribute('content', 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no');
+            }
         });
         document.body.appendChild(this.usernameInput);
-        // Password input
+        // Password input - iOS optimized
         this.passwordInput = document.createElement('input');
         this.passwordInput.type = 'password';
         this.passwordInput.placeholder = 'Password';
         this.passwordInput.autocomplete = 'current-password';
         this.passwordInput.inputMode = 'text';
+        this.passwordInput.autocapitalize = 'none'; // iOS: prevent auto-capitalization
+        this.passwordInput.autocorrect = 'off'; // iOS: disable autocorrect
+        this.passwordInput.spellcheck = false; // Disable spellcheck
         this.passwordInput.style.cssText = `
       position: fixed;
       left: ${canvasRect.left + centerX - 200}px;
       top: ${canvasRect.top + centerY - 40}px;
       width: 400px;
-      height: 40px;
+      height: ${isIOS ? '44px' : '40px'};
       font-size: 20px;
       font-family: monospace;
-      padding: 0 10px;
+      padding: ${isIOS ? '0 12px' : '0 10px'};
       border: 3px solid #9E9E9E;
       border-radius: 0;
       background: #FFFFFF;
       color: #212121;
-      z-index: 1000;
+      z-index: 10000;
       box-sizing: border-box;
       touch-action: manipulation;
+      -webkit-appearance: none;
+      -webkit-tap-highlight-color: transparent;
+      -webkit-user-select: text;
+      user-select: text;
+      font-size: 16px;
+      line-height: ${isIOS ? '44px' : '40px'};
     `;
+        // iOS-specific: Force focus on tap
+        this.passwordInput.addEventListener('touchstart', (e) => {
+            e.stopPropagation();
+            setTimeout(() => {
+                this.passwordInput.focus();
+                this.passwordInput.click();
+            }, 0);
+        }, { passive: true });
         this.passwordInput.addEventListener('input', (e) => {
             const target = e.target;
             if (target.value.length <= 30) {
@@ -114,6 +171,19 @@ export class LoginScreen {
         });
         this.passwordInput.addEventListener('focus', () => {
             this.selectedField = 'password';
+            // iOS: Scroll input into view
+            if (isIOS) {
+                setTimeout(() => {
+                    this.passwordInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }, 300);
+            }
+        });
+        // iOS: Prevent zoom on focus
+        this.passwordInput.addEventListener('focus', () => {
+            const viewport = document.querySelector('meta[name=viewport]');
+            if (viewport && isIOS) {
+                viewport.setAttribute('content', 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no');
+            }
         });
         this.passwordInput.addEventListener('keydown', (e) => {
             if (e.key === 'Enter') {

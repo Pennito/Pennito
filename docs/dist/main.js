@@ -135,6 +135,29 @@ class App {
         this.gameLoop(performance.now());
     }
 }
+// Check for new version by fetching the main.js file and checking its cache buster
+async function checkForCodeUpdate() {
+    try {
+        // Fetch the current index.html to check the version in the script tag
+        const response = await fetch(`${window.location.origin}${window.location.pathname}?t=${Date.now()}`, {
+            cache: 'no-store',
+            headers: { 'Cache-Control': 'no-cache' }
+        });
+        if (!response.ok)
+            return false;
+        const html = await response.text();
+        const versionMatch = html.match(/main\.js\?v=([\d.]+)/);
+        if (versionMatch && versionMatch[1] !== GAME_VERSION) {
+            console.log(`[AUTO-UPDATE] 🔄 New version detected: ${GAME_VERSION} → ${versionMatch[1]}`);
+            return true;
+        }
+        return false;
+    }
+    catch (error) {
+        console.error('[AUTO-UPDATE] Error checking for updates:', error);
+        return false;
+    }
+}
 // Automatic reset on version change ONLY - no manual reset available
 async function checkVersionReset() {
     const STORAGE_KEY = 'ipenno_game_version';
@@ -169,6 +192,15 @@ async function checkVersionReset() {
     }
     else {
         console.log(`[AUTO-RESET] Version ${GAME_VERSION} matches stored version - no reset needed`);
+        // Check for code updates periodically (every 30 seconds)
+        setInterval(async () => {
+            const hasUpdate = await checkForCodeUpdate();
+            if (hasUpdate) {
+                console.log('[AUTO-UPDATE] 🔄 New version available! Refreshing...');
+                alert('Game update available! Refreshing...');
+                window.location.reload();
+            }
+        }, 30000); // Check every 30 seconds
     }
 }
 // NO manual reset function - removed for security
@@ -176,6 +208,9 @@ async function checkVersionReset() {
 // Initialize app
 async function initApp() {
     console.log('Initializing app...');
+    // Store current version in Supabase (for remote version checking)
+    const dbSync = DatabaseSync.getInstance();
+    await dbSync.setGameVersion(GAME_VERSION);
     // Check version and auto-reset if needed (for demo game)
     await checkVersionReset();
     const canvas = document.getElementById('gameCanvas');

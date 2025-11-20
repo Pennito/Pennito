@@ -330,6 +330,47 @@ export class DatabaseSync {
     }
   }
 
+  // Store game version in Supabase for remote version checking
+  public async setGameVersion(version: string): Promise<void> {
+    try {
+      const supabase = await getSupabaseClient();
+      if (!supabase) return;
+
+      // Store version in a simple key-value table (or use a settings table)
+      // For now, we'll use a simple approach with a 'game_settings' table
+      // If table doesn't exist, this will fail gracefully
+      const { error } = await supabase
+        .from('game_settings')
+        .upsert({ key: 'game_version', value: version, updated_at: new Date().toISOString() }, { onConflict: 'key' });
+
+      if (error && error.code !== '42P01') { // 42P01 = table doesn't exist, which is OK
+        console.warn('[VERSION-SYNC] Could not store version in Supabase:', error.message);
+      }
+    } catch (error) {
+      // Table might not exist, that's OK
+      console.log('[VERSION-SYNC] Version sync table not available (optional feature)');
+    }
+  }
+
+  // Get game version from Supabase
+  public async getGameVersion(): Promise<string | null> {
+    try {
+      const supabase = await getSupabaseClient();
+      if (!supabase) return null;
+
+      const { data, error } = await supabase
+        .from('game_settings')
+        .select('value')
+        .eq('key', 'game_version')
+        .single();
+
+      if (error || !data) return null;
+      return data.value;
+    } catch (error) {
+      return null;
+    }
+  }
+
   // Broadcast global message to all active players
   public async broadcastGlobalMessage(message: string): Promise<void> {
     try {

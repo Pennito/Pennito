@@ -338,18 +338,129 @@ export class MultiplayerSync {
     this.worldChannel.subscribe();
   }
 
+  // Broadcast instant block change (for breaking/placing blocks)
+  public async broadcastBlockChange(x: number, y: number, tileType: number, action: 'break' | 'place'): Promise<void> {
+    if (!this.supabase) return;
+
+    try {
+      if (!this.worldChannel) {
+        this.worldChannel = this.supabase.channel(`world-updates:${this.worldName}`);
+        await this.worldChannel.subscribe();
+      }
+      
+      await this.worldChannel.send({
+        type: 'broadcast',
+        event: 'block_change',
+        payload: { x, y, tileType, action, userId: this.userId, timestamp: Date.now() }
+      });
+      console.log(`[BLOCK-SYNC] 📤 Broadcasted ${action} at (${x}, ${y})`);
+    } catch (error) {
+      console.error('[MULTIPLAYER] ❌ Error broadcasting block change:', error);
+    }
+  }
+
+  // Broadcast dropped item creation
+  public async broadcastDroppedItem(x: number, y: number, tileType: number, gemValue?: number): Promise<void> {
+    if (!this.supabase) return;
+
+    try {
+      if (!this.worldChannel) {
+        this.worldChannel = this.supabase.channel(`world-updates:${this.worldName}`);
+        await this.worldChannel.subscribe();
+      }
+      
+      await this.worldChannel.send({
+        type: 'broadcast',
+        event: 'dropped_item',
+        payload: { x, y, tileType, gemValue, userId: this.userId, timestamp: Date.now() }
+      });
+      console.log(`[ITEM-SYNC] 📤 Broadcasted dropped item at (${x}, ${y})`);
+    } catch (error) {
+      console.error('[MULTIPLAYER] ❌ Error broadcasting dropped item:', error);
+    }
+  }
+
+  // Set callbacks for block changes and dropped items
+  private blockChangeCallback: ((x: number, y: number, tileType: number, action: 'break' | 'place') => void) | null = null;
+  private droppedItemCallback: ((x: number, y: number, tileType: number, gemValue?: number) => void) | null = null;
+
+  public setBlockChangeCallback(callback: (x: number, y: number, tileType: number, action: 'break' | 'place') => void): void {
+    this.blockChangeCallback = callback;
+    
+    if (!this.worldChannel) {
+      this.worldChannel = this.supabase.channel(`world-updates:${this.worldName}`);
+    }
+    
+    this.worldChannel.on('broadcast', { event: 'block_change' }, (payload: any) => {
+      if (payload.payload && payload.payload.userId !== this.userId && this.blockChangeCallback) {
+        this.blockChangeCallback(
+          payload.payload.x,
+          payload.payload.y,
+          payload.payload.tileType,
+          payload.payload.action
+        );
+      }
+    });
+    
+    this.worldChannel.subscribe();
+  }
+
+  public setDroppedItemCallback(callback: (x: number, y: number, tileType: number, gemValue?: number) => void): void {
+    this.droppedItemCallback = callback;
+    
+    if (!this.worldChannel) {
+      this.worldChannel = this.supabase.channel(`world-updates:${this.worldName}`);
+    }
+    
+    this.worldChannel.on('broadcast', { event: 'dropped_item' }, (payload: any) => {
+      if (payload.payload && payload.payload.userId !== this.userId && this.droppedItemCallback) {
+        this.droppedItemCallback(
+          payload.payload.x,
+          payload.payload.y,
+          payload.payload.tileType,
+          payload.payload.gemValue
+        );
+      }
+    });
+    
+    this.worldChannel.subscribe();
+  }
+
   public getOtherPlayers(): OtherPlayer[] {
-    // Remove players that haven't updated in 5 seconds (disconnected)
+    // Remove players that haven't updated in 3 seconds (disconnected)
     const now = Date.now();
-    const timeout = 5000;
+    const timeout = 3000; // Reduced from 5s to 3s for faster cleanup
     
     for (const [userId, player] of this.otherPlayers.entries()) {
       if (now - player.lastUpdate > timeout) {
+        console.log(`[MULTIPLAYER] 🚪 Player ${player.username} left (timeout)`);
         this.otherPlayers.delete(userId);
+        this.notifyPlayersUpdate();
       }
     }
 
     return Array.from(this.otherPlayers.values());
+  }
+  
+  // Periodically check for disconnected players in active_players table
+  public async cleanupDisconnectedPlayers(): Promise<void> {
+    if (!this.supabase) return;
+    
+    try {
+      // Delete players that haven't been seen in 10 seconds
+      const tenSecondsAgo = new Date(Date.now() - 10000).toISOString();
+      const { error } = await this.supabase
+        .from('active_players')
+        .delete()
+        .lt('last_seen', tenSecondsAgo)
+        .neq('user_id', this.userId); // Don't delete ourselves
+      
+      if (error) {
+        console.error('[MULTIPLAYER] Error cleaning up disconnected players:', error);
+      }
+    } catch (error) {
+      console.error('[MULTIPLAYER] Error cleaning up disconnected players:', error);
+    }
   }
 
   public async leaveWorld(): Promise<void> {
