@@ -1,7 +1,7 @@
 import { TileType } from './types.js';
 
 // Game version - increment this to force automatic reset on next load
-export const GAME_VERSION = '1.0.5'; // Update this when you want to force a reset
+export const GAME_VERSION = '1.0.6'; // Update this when you want to force a reset
 
 export const TILE_SIZE = 32;
 export const WORLD_WIDTH = 50;

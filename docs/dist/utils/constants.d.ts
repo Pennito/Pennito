@@ -1,5 +1,5 @@
 import { TileType } from './types.js';
-export declare const GAME_VERSION = "1.0.5";
+export declare const GAME_VERSION = "1.0.6";
 export declare const TILE_SIZE = 32;
 export declare const WORLD_WIDTH = 50;
 export declare const WORLD_HEIGHT = 50;
