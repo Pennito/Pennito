@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test</title>
+</head>
+<body>
+    <h1>Testing Game Load</h1>
+    <canvas id="gameCanvas" width="1024" height="576" style="border: 2px solid #000;"></canvas>
+    <script type="module">
+        console.log('Test script loading...');
+        import('./dist/main.js').then(() => {
+            console.log('Module loaded successfully!');
+        }).catch((error) => {
+            console.error('Error loading module:', error);
+            document.body.innerHTML += '<p style="color: red;">Error: ' + error.message + '</p>';
+        });
+    </script>
+</body>
+</html>
+
+

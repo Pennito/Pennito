@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Simple Canvas Test</title>
+</head>
+<body>
+    <h1>Canvas Test</h1>
+    <canvas id="testCanvas" width="1024" height="576" style="border: 2px solid #000;"></canvas>
+    <script>
+        const canvas = document.getElementById('testCanvas');
+        const ctx = canvas.getContext('2d');
+        
+        if (!ctx) {
+            document.body.innerHTML += '<p style="color: red;">ERROR: Could not get 2d context!</p>';
+        } else {
+            ctx.fillStyle = '#ff0000';
+            ctx.fillRect(100, 100, 200, 200);
+            ctx.fillStyle = '#fff';
+            ctx.font = '30px Arial';
+            ctx.fillText('Canvas Works!', 150, 250);
+            document.body.innerHTML += '<p style="color: green;">Canvas is working!</p>';
+        }
+    </script>
+</body>
+</html>
+
+

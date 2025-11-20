@@ -1,0 +1,18 @@
+{
+  "name": "sandbox-game",
+  "version": "1.0.0",
+  "description": "IPenno - 2D Sandbox Game - Growtopia/Terraria inspired",
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "serve": "python3 -m http.server 8000"
+  },
+  "devDependencies": {
+    "typescript": "^5.3.0"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.80.0"
+  }
+}
+
