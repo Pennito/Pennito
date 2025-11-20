@@ -49,6 +49,7 @@ export interface PlayerData {
   equippedWings?: TileType | null; // Currently equipped wings (enables double jump)
   maxInventorySlots?: number; // Expandable inventory slots
   gems?: number; // Player's gem currency
+  username?: string; // Player username (for multiplayer)
 }
 
 export interface SignData {

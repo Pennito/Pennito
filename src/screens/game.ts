@@ -9,6 +9,8 @@ import { TileType } from '../utils/types.js';
 import { TILE_SIZE, CANVAS_WIDTH, CANVAS_HEIGHT, WORLD_WIDTH, WORLD_HEIGHT } from '../utils/constants.js';
 import { DroppedItem } from '../entities/droppedItem.js';
 import { ShopUI, SHOP_ITEMS } from '../ui/shopUI.js';
+import { MultiplayerSync, OtherPlayer } from '../network/multiplayer.js';
+import { getSupabaseClient } from '../network/supabase.js';
 
 export class GameScreen {
   private canvas: HTMLCanvasElement;
@@ -40,6 +42,9 @@ export class GameScreen {
   private chatInput: string = ''; // Current chat input
   private isChatOpen: boolean = false; // Whether chat input is active
   private lastInventoryClick: { slot: number; time: number } | null = null; // For double-click detection
+  private multiplayer: MultiplayerSync | null = null; // Multiplayer sync
+  private otherPlayers: OtherPlayer[] = []; // Other players in the world
+  private lastPositionBroadcast: number = 0; // Throttle position updates
 
   constructor(
     canvas: HTMLCanvasElement,
@@ -118,9 +123,17 @@ export class GameScreen {
             this.chatInput = '';
           }
           this.isChatOpen = false;
+          // Hide mobile keyboard if open
+          if (this.input.mobileControls) {
+            this.input.mobileControls.hideKeyboard();
+          }
         } else if (e.key === 'Escape') {
           this.isChatOpen = false;
           this.chatInput = '';
+          // Hide mobile keyboard if open
+          if (this.input.mobileControls) {
+            this.input.mobileControls.hideKeyboard();
+          }
         } else if (e.key.length === 1) {
           if (this.chatInput.length < 100) {
             this.chatInput += e.key;
@@ -133,6 +146,15 @@ export class GameScreen {
           e.stopPropagation();
           this.isChatOpen = true;
           this.chatInput = '';
+          // Show mobile keyboard if on mobile
+          if (this.input.mobileControls && this.input.mobileControls.isMobileDevice()) {
+            this.input.mobileControls.showKeyboard((text) => {
+              if (text.trim()) {
+                this.addChatMessage(this.player.username, text.trim());
+              }
+              this.isChatOpen = false;
+            });
+          }
         }
       }
     }, true); // Use capture phase
@@ -325,11 +347,101 @@ export class GameScreen {
       
       // Set camera
       this.camera.setPosition(this.player.x, this.player.y);
+      
+      // Initialize multiplayer sync after world loads
+      this.initializeMultiplayer();
+      
+      // Listen for global update messages
+      this.listenForGlobalUpdates();
     });
 
     // Initial camera position before world loads
     this.camera.setPosition(this.player.x, this.player.y);
     this.lastTime = performance.now();
+  }
+
+  private async initializeMultiplayer(): Promise<void> {
+    const userId = this.dbSync.getCurrentUserId();
+    if (!userId) {
+      console.warn('[MULTIPLAYER] No user ID, skipping multiplayer init');
+      return;
+    }
+
+    this.multiplayer = new MultiplayerSync(this.worldName, userId, this.username);
+    
+    // Set callback for when other players update
+    this.multiplayer.setPlayersUpdateCallback((players) => {
+      this.otherPlayers = players;
+    });
+
+      // Initialize multiplayer sync
+      await this.multiplayer.initialize();
+      console.log('[MULTIPLAYER] Initialized for world:', this.worldName);
+      
+      // Set up chat callback
+      this.multiplayer.setChatCallback((username: string, text: string) => {
+        this.chatMessages.push({
+          username: username,
+          text: text,
+          timestamp: Date.now()
+        });
+        // Keep only last 50 messages
+        if (this.chatMessages.length > 50) {
+          this.chatMessages.shift();
+        }
+      });
+      
+      // Set up world update callback for real-time block changes
+      this.multiplayer.setWorldUpdateCallback((worldData: any) => {
+        console.log('[WORLD-SYNC] ✅ Received world update from another player');
+        // Update local world with received data
+        if (worldData && worldData.tiles) {
+          try {
+            this.world.loadWorldData(worldData);
+            console.log('[WORLD-SYNC] ✅ World data loaded successfully');
+          } catch (error) {
+            console.error('[WORLD-SYNC] ❌ Error loading world data:', error);
+          }
+        } else {
+          console.warn('[WORLD-SYNC] ⚠️ Invalid world data received:', worldData);
+        }
+      });
+    }
+
+  private async listenForGlobalUpdates(): Promise<void> {
+    const supabase = await getSupabaseClient();
+    if (!supabase) return;
+
+    try {
+      const channel = supabase.channel('global-updates');
+      
+      channel.on('broadcast', { event: 'global_message' }, (payload: any) => {
+        if (payload.payload && payload.payload.message) {
+          const message = payload.payload.message;
+          console.log('[GLOBAL-UPDATE] Received:', message);
+          
+          // Add message to chat
+          this.chatMessages.push({
+            username: 'SYSTEM',
+            text: message,
+            timestamp: Date.now()
+          });
+          
+          // If message contains "game updating", force logout and refresh
+          if (message.includes('game updating')) {
+            setTimeout(() => {
+              alert('Game is updating! Please refresh the page.');
+              window.location.reload();
+            }, 2000); // Give 2 seconds to see the message
+          }
+        }
+      });
+
+      await channel.subscribe();
+      console.log('[GLOBAL-UPDATE] Listening for global update messages');
+    } catch (error) {
+      console.error('[GLOBAL-UPDATE] Error setting up listener:', error);
+    }
   }
 
   private async loadWorld(worldName: string, isNew: boolean): Promise<void> {
@@ -360,6 +472,13 @@ export class GameScreen {
     
     // Sync to database (debounced - every 3 seconds) - no localStorage needed
     this.dbSync.scheduleWorldSync(this.worldName, worldData);
+    
+    // Broadcast world update immediately via multiplayer for real-time sync (fire-and-forget)
+    if (this.multiplayer) {
+      this.multiplayer.broadcastWorldUpdate(worldData).catch(err => {
+        console.error('[WORLD-SYNC] Error broadcasting world update:', err);
+      });
+    }
   }
 
   public update(deltaTime: number): void {
@@ -426,6 +545,14 @@ export class GameScreen {
 
     // Update mouse world position
     this.input.updateMouseWorld(this.camera.x, this.camera.y);
+
+    // Broadcast player position for multiplayer (throttled to every 100ms)
+    const now = Date.now();
+    if (now - this.lastPositionBroadcast > 100 && this.multiplayer) {
+      const playerData = this.player.getPlayerData();
+      this.multiplayer.broadcastPosition(this.player.x, this.player.y, playerData);
+      this.lastPositionBroadcast = now;
+    }
 
     // Check for item pickup
     this.droppedItems = this.droppedItems.filter(item => {
@@ -742,6 +869,11 @@ export class GameScreen {
     // Render dropped items before the player so items appear behind character
     for (const item of this.droppedItems) {
       item.render(this.ctx, this.camera.x, this.camera.y);
+    }
+
+    // Render other players first (behind main player)
+    for (const otherPlayer of this.otherPlayers) {
+      this.renderOtherPlayer(otherPlayer);
     }
 
     // Render player last (in front) - username now rendered inside player.render()
@@ -1620,16 +1752,22 @@ export class GameScreen {
     this.ctx.fillText('CANCEL', cancelBtnX + 50, cancelBtnY + 26);
   }
 
-  private addChatMessage(username: string, text: string): void {
+  private async addChatMessage(username: string, text: string): Promise<void> {
+    // Add to local chat
     this.chatMessages.push({
-      username,
-      text,
+      username: username,
+      text: text,
       timestamp: Date.now()
     });
     
-    // Keep only last 10 messages
-    if (this.chatMessages.length > 10) {
+    // Keep only last 50 messages
+    if (this.chatMessages.length > 50) {
       this.chatMessages.shift();
+    }
+    
+    // Broadcast to other players via multiplayer
+    if (this.multiplayer) {
+      await this.multiplayer.broadcastChatMessage(username, text);
     }
   }
   
@@ -1669,8 +1807,8 @@ export class GameScreen {
       }
     }
     
-    // Render chat input if open
-    if (this.isChatOpen) {
+    // Render chat input if open (only show on desktop, mobile uses virtual keyboard)
+    if (this.isChatOpen && (!this.input.mobileControls || !this.input.mobileControls.isMobileDevice())) {
       const inputY = startY + 10;
       const inputHeight = 30;
       
@@ -1696,7 +1834,145 @@ export class GameScreen {
     }
   }
 
+  private renderOtherPlayer(otherPlayer: OtherPlayer): void {
+    // Convert world coordinates to screen coordinates
+    const screenX = otherPlayer.x - this.camera.x;
+    const screenY = otherPlayer.y - this.camera.y;
+
+    // Only render if on screen
+    if (screenX < -50 || screenX > CANVAS_WIDTH + 50 ||
+        screenY < -50 || screenY > CANVAS_HEIGHT + 50) {
+      return;
+    }
+
+    // Render other player using the same rendering logic as main player
+    // We'll create a simplified version here
+    const playerWidth = 20;
+    const playerHeight = 30;
+    const walkOffset = Math.sin(Date.now() / 200) * 2; // Simple walking animation
+
+    // Shadow
+    this.ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
+    this.ctx.beginPath();
+    this.ctx.ellipse(screenX + playerWidth / 2, screenY + playerHeight + 5, 8, 3, 0, 0, Math.PI * 2);
+    this.ctx.fill();
+
+    // BACK LEG
+    const backLegX = screenX + 3;
+    if (otherPlayer.equippedPants) {
+      this.ctx.fillStyle = '#000000';
+      this.ctx.fillRect(backLegX - walkOffset, screenY + 20, 5, 10);
+    } else {
+      this.ctx.fillStyle = '#ffd4a3';
+      this.ctx.fillRect(backLegX - walkOffset, screenY + 20, 5, 10);
+    }
+    this.ctx.strokeStyle = '#000';
+    this.ctx.lineWidth = 1;
+    this.ctx.strokeRect(backLegX - walkOffset, screenY + 20, 5, 10);
+
+    // BODY
+    if (otherPlayer.equippedShirt) {
+      this.ctx.fillStyle = '#FFFFFF';
+      this.ctx.fillRect(screenX + 2, screenY + 8, playerWidth - 4, 13);
+      this.ctx.strokeStyle = '#000';
+      this.ctx.lineWidth = 2;
+      this.ctx.strokeRect(screenX + 2, screenY + 8, playerWidth - 4, 13);
+    } else {
+      this.ctx.fillStyle = '#ffd4a3';
+      this.ctx.fillRect(screenX + 2, screenY + 8, playerWidth - 4, 13);
+      this.ctx.strokeStyle = '#000';
+      this.ctx.lineWidth = 1;
+      this.ctx.strokeRect(screenX + 2, screenY + 8, playerWidth - 4, 13);
+    }
+
+    // FRONT LEG
+    const frontLegX = screenX + playerWidth - 6;
+    if (otherPlayer.equippedPants) {
+      this.ctx.fillStyle = '#000000';
+      this.ctx.fillRect(frontLegX + walkOffset, screenY + 20, 5, 10);
+    } else {
+      this.ctx.fillStyle = '#ffd4a3';
+      this.ctx.fillRect(frontLegX + walkOffset, screenY + 20, 5, 10);
+    }
+    this.ctx.strokeStyle = '#000';
+    this.ctx.lineWidth = 1;
+    this.ctx.strokeRect(frontLegX + walkOffset, screenY + 20, 5, 10);
+
+    // FEET
+    if (otherPlayer.equippedShoes) {
+      this.ctx.fillStyle = '#C41E3A';
+      this.ctx.fillRect(backLegX - walkOffset, screenY + 28, 5, 3);
+      this.ctx.fillRect(frontLegX + walkOffset, screenY + 28, 5, 3);
+    } else {
+      this.ctx.fillStyle = '#ffd4a3';
+      this.ctx.fillRect(backLegX - walkOffset, screenY + 29, 5, 2);
+      this.ctx.fillRect(frontLegX + walkOffset, screenY + 29, 5, 2);
+    }
+
+    // HEAD
+    const headWidth = 16;
+    const headHeight = 12;
+    const headX = screenX + (playerWidth - headWidth) / 2;
+    const headY = screenY - 4;
+    this.ctx.fillStyle = '#ffd4a3';
+    this.ctx.fillRect(headX, headY, headWidth, headHeight);
+    this.ctx.strokeStyle = '#000';
+    this.ctx.lineWidth = 1;
+    this.ctx.strokeRect(headX, headY, headWidth, headHeight);
+
+    // Eyes
+    this.ctx.fillStyle = '#fff';
+    this.ctx.fillRect(headX + 3, headY + 5, 4, 4);
+    this.ctx.fillRect(headX + 9, headY + 5, 4, 4);
+    this.ctx.fillStyle = '#000';
+    this.ctx.fillRect(headX + 4, headY + 6, 2, 2);
+    this.ctx.fillRect(headX + 10, headY + 6, 2, 2);
+
+    // HAT (if equipped)
+    if (otherPlayer.equippedHat) {
+      const hatY = headY - 8;
+      const hatX = screenX + playerWidth / 2;
+      this.ctx.fillStyle = '#2C2C2C';
+      this.ctx.beginPath();
+      this.ctx.ellipse(hatX, hatY + 8, 12, 3, 0, 0, Math.PI * 2);
+      this.ctx.fill();
+      this.ctx.fillStyle = '#1C1C1C';
+      this.ctx.fillRect(hatX - 7, hatY - 4, 14, 12);
+    }
+
+    // WINGS (if equipped)
+    if (otherPlayer.equippedWings) {
+      const wingX = screenX + playerWidth / 2;
+      const wingY = screenY + 12;
+      this.ctx.fillStyle = '#FF1493';
+      this.ctx.beginPath();
+      this.ctx.ellipse(wingX - 12, wingY, 8, 4, -0.3, 0, Math.PI * 2);
+      this.ctx.fill();
+      this.ctx.beginPath();
+      this.ctx.ellipse(wingX + 12, wingY, 8, 4, 0.3, 0, Math.PI * 2);
+      this.ctx.fill();
+    }
+
+    // USERNAME above head
+    const worldOwner = this.world.getOwner();
+    const isOwner = worldOwner && worldOwner === otherPlayer.username;
+    this.ctx.fillStyle = isOwner ? '#00FF00' : '#FFFFFF';
+    this.ctx.font = 'bold 12px monospace';
+    this.ctx.textAlign = 'center';
+    this.ctx.textBaseline = 'bottom';
+    this.ctx.strokeStyle = '#000000';
+    this.ctx.lineWidth = 3;
+    const usernameY = otherPlayer.equippedHat ? screenY - 17 : screenY - 5;
+    this.ctx.strokeText(otherPlayer.username, screenX + playerWidth / 2, usernameY);
+    this.ctx.fillText(otherPlayer.username, screenX + playerWidth / 2, usernameY);
+  }
+
   public async cleanup(): Promise<void> {
+    // Leave multiplayer world
+    if (this.multiplayer) {
+      await this.multiplayer.leaveWorld();
+      this.multiplayer = null;
+    }
     // Force sync on exit
     const worldData = this.world.getWorldData();
     await this.dbSync.forceSync(this.worldName, worldData);
