@@ -1,4 +1,4 @@
-import { Item } from './utils/types.js';
+import { Item, TileType } from './utils/types.js';
 export declare class UI {
     private canvas;
     private ctx;
@@ -11,9 +11,11 @@ export declare class UI {
     private inventoryExpansionCurrent;
     constructor(canvas: HTMLCanvasElement);
     isInventoryExpanded(): boolean;
+    toggleInventoryExpansion(): void;
+    checkExpandButtonClick(x: number, y: number, maxSlots: number): boolean;
     updateInventoryAnimation(): void;
     private updateHover;
-    private renderItemIcon;
+    renderItemIcon(tileType: TileType, x: number, y: number, size: number): void;
     renderInventory(inventory: Item[], selectedSlot: number, maxSlots?: number, playerGems?: number, expansionCost?: number): void;
     private renderTooltip;
     renderSky(): void;

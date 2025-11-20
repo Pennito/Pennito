@@ -25,6 +25,8 @@ export declare class MultiplayerSync {
     initialize(): Promise<void>;
     private joinWorld;
     private subscribeToPlayerUpdates;
+    private pollingInterval;
+    private startPollingFallback;
     private fetchCurrentPlayers;
     private handlePlayerUpdate;
     private notifyPlayersUpdate;

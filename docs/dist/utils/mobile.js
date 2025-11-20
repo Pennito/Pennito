@@ -1,3 +1,8 @@
+// Mobile detection utility
+export function isMobile() {
+    return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
+        (window.innerWidth <= 768 && 'ontouchstart' in window);
+}
 // Mobile touch controls and virtual keyboard
 export class MobileControls {
     constructor(canvas) {

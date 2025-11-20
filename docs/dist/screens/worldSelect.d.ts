@@ -11,7 +11,9 @@ export declare class WorldSelectScreen {
     private onWorldSelected;
     private dbSync;
     private username;
+    private worldNameInput;
     constructor(canvas: HTMLCanvasElement, username: string, onWorldSelected: (worldName: string, isNew: boolean) => void);
+    private createMobileInput;
     private loadRecentWorlds;
     private setupInput;
     private handleKeyDown;

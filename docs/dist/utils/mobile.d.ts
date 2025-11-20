@@ -1,3 +1,4 @@
+export declare function isMobile(): boolean;
 export declare class MobileControls {
     private canvas;
     private leftButton;

@@ -162,16 +162,37 @@ async function checkForCodeUpdate() {
 async function checkVersionReset() {
     const STORAGE_KEY = 'ipenno_game_version';
     const storedVersion = localStorage.getItem(STORAGE_KEY);
+    console.log(`[VERSION-CHECK] Stored: "${storedVersion}", Current: "${GAME_VERSION}"`);
     if (storedVersion !== GAME_VERSION) {
-        console.log(`[AUTO-RESET] Version changed: ${storedVersion} → ${GAME_VERSION}`);
-        console.log('[AUTO-RESET] Broadcasting update message and performing reset...');
+        console.log(`[AUTO-RESET] 🔄 Version changed: ${storedVersion || 'none'} → ${GAME_VERSION}`);
+        console.log('[AUTO-RESET] Broadcasting update message, logging out everyone, and performing reset...');
         try {
             const dbSync = DatabaseSync.getInstance();
             // First, broadcast global update message to all active players
             await dbSync.broadcastGlobalMessage('{Global Message ; game updating}');
             // Wait a moment for message to be received
             await new Promise(resolve => setTimeout(resolve, 2000));
-            // Then clear all data
+            // Delete all active players (force logout everyone)
+            try {
+                const { getSupabaseClient } = await import('./network/supabase.js');
+                const supabase = await getSupabaseClient();
+                if (supabase) {
+                    const { error: deleteError } = await supabase
+                        .from('active_players')
+                        .delete()
+                        .neq('id', '00000000-0000-0000-0000-000000000000'); // Delete all
+                    if (deleteError) {
+                        console.error('[AUTO-RESET] Error deleting active players:', deleteError);
+                    }
+                    else {
+                        console.log('[AUTO-RESET] ✅ All active players logged out');
+                    }
+                }
+            }
+            catch (error) {
+                console.error('[AUTO-RESET] Error during player logout:', error);
+            }
+            // Then clear all data (users, worlds, inventories)
             await dbSync.deleteAllWorlds();
             console.log('[AUTO-RESET] ✅ All data cleared!');
             // Store new version
@@ -179,7 +200,7 @@ async function checkVersionReset() {
             console.log(`[AUTO-RESET] Version ${GAME_VERSION} stored`);
             // Force logout and refresh
             console.log('[AUTO-RESET] Forcing page refresh...');
-            alert('Game is updating! Please refresh the page.');
+            alert(`Game updated to v${GAME_VERSION}!\n\nAll players have been logged out.\nThe page will refresh now.`);
             window.location.reload();
         }
         catch (error) {
@@ -187,6 +208,7 @@ async function checkVersionReset() {
             // Still store version to prevent infinite loops
             localStorage.setItem(STORAGE_KEY, GAME_VERSION);
             // Force refresh anyway
+            alert(`Game updated to v${GAME_VERSION}!\n\nThe page will refresh now.`);
             window.location.reload();
         }
     }
@@ -207,12 +229,12 @@ async function checkVersionReset() {
 // Reset only happens automatically on version updates
 // Initialize app
 async function initApp() {
-    console.log('Initializing app...');
+    console.log(`[INIT] Game version: ${GAME_VERSION}`);
+    // Check version and auto-reset if needed FIRST (before anything else)
+    await checkVersionReset();
     // Store current version in Supabase (for remote version checking)
     const dbSync = DatabaseSync.getInstance();
     await dbSync.setGameVersion(GAME_VERSION);
-    // Check version and auto-reset if needed (for demo game)
-    await checkVersionReset();
     const canvas = document.getElementById('gameCanvas');
     if (!canvas) {
         console.error('Canvas element not found!');

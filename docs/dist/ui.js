@@ -17,21 +17,31 @@ export class UI {
             const y = e.clientY - rect.top;
             this.updateHover(x, y);
         });
-        // Click to expand/collapse inventory
-        canvas.addEventListener('click', (e) => {
-            const rect = canvas.getBoundingClientRect();
-            const x = e.clientX - rect.left;
-            const y = e.clientY - rect.top;
-            const inventoryY = CANVAS_HEIGHT - 80;
-            // Toggle expansion when clicking on inventory bar
-            if (y >= inventoryY - 10 && y <= CANVAS_HEIGHT) {
-                this.inventoryExpanded = !this.inventoryExpanded;
-                this.inventoryExpansionTarget = this.inventoryExpanded ? 1 : 0;
-            }
-        });
+        // Note: Inventory expansion is now handled in GameScreen.handleUIClick
+        // to prevent conflicts with slot selection
     }
     isInventoryExpanded() {
         return this.inventoryExpanded;
+    }
+    toggleInventoryExpansion() {
+        this.inventoryExpanded = !this.inventoryExpanded;
+        this.inventoryExpansionTarget = this.inventoryExpanded ? 1 : 0;
+        console.log(`[INVENTORY] Toggled expansion: ${this.inventoryExpanded}`);
+    }
+    checkExpandButtonClick(x, y, maxSlots) {
+        // Check if click is on the expand/collapse indicator button
+        const slotsPerRow = 8;
+        const maxRows = Math.ceil(maxSlots / slotsPerRow);
+        if (maxRows <= 1)
+            return false; // No expand button if only one row
+        const baseY = CANVAS_HEIGHT - 80;
+        const indicatorY = baseY - 5;
+        const indicatorHeight = 20;
+        // Check if click is in the expand/collapse button area (centered text area)
+        const buttonWidth = 300;
+        const buttonX = (CANVAS_WIDTH - buttonWidth) / 2;
+        return x >= buttonX && x <= buttonX + buttonWidth &&
+            y >= indicatorY - indicatorHeight && y <= indicatorY + 5;
     }
     updateInventoryAnimation() {
         // Smooth animation for inventory expansion
