@@ -386,6 +386,19 @@ export class Player {
     ctx.lineWidth = 1;
     ctx.strokeRect(backArmX, screenY + 8 - armSwing, 3, 12);
     
+    // BACK HAND (at end of back arm) - more visible
+    const backHandY = screenY + 8 - armSwing + 12;
+    ctx.fillStyle = '#ffd4a3'; // Skin tone
+    ctx.fillRect(backArmX - 1, backHandY, 5, 4); // Larger hand (5x4 instead of 3x2)
+    ctx.strokeStyle = '#000';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(backArmX - 1, backHandY, 5, 4);
+    // Fingers detail
+    ctx.fillStyle = '#f0c090'; // Slightly darker for depth
+    ctx.fillRect(backArmX, backHandY + 1, 1, 2);
+    ctx.fillRect(backArmX + 2, backHandY + 1, 1, 2);
+    ctx.fillRect(backArmX + 4, backHandY + 1, 1, 2);
+    
     // BACK LEG (drawn behind body) - NAKED (skin color)
     const backLegX = screenX + (this.velocityX < 0 ? this.width - 6 : 3);
     ctx.fillStyle = '#ffd4a3'; // Skin tone
@@ -535,12 +548,22 @@ export class Player {
     const frontArmX = screenX + (this.velocityX < 0 ? -3 : this.width - 2);
     ctx.fillStyle = '#ffd4a3'; // Skin tone
     ctx.fillRect(frontArmX, screenY + 8 + armSwing, 3, 12);
-    // Hand
-    ctx.fillStyle = '#ffd4a3';
-    ctx.fillRect(frontArmX, screenY + 19 + armSwing, 3, 2);
     ctx.strokeStyle = '#000';
     ctx.lineWidth = 1;
     ctx.strokeRect(frontArmX, screenY + 8 + armSwing, 3, 12);
+    
+    // FRONT HAND (at end of front arm) - more visible
+    const frontHandY = screenY + 8 + armSwing + 12;
+    ctx.fillStyle = '#ffd4a3'; // Skin tone
+    ctx.fillRect(frontArmX - 1, frontHandY, 5, 4); // Larger hand (5x4 instead of 3x2)
+    ctx.strokeStyle = '#000';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(frontArmX - 1, frontHandY, 5, 4);
+    // Fingers detail
+    ctx.fillStyle = '#f0c090'; // Slightly darker for depth
+    ctx.fillRect(frontArmX, frontHandY + 1, 1, 2);
+    ctx.fillRect(frontArmX + 2, frontHandY + 1, 1, 2);
+    ctx.fillRect(frontArmX + 4, frontHandY + 1, 1, 2);
     
     // FEDORA HAT (if equipped) - rendered ABOVE the head
     if (this.equippedHat === TileType.FEDORA) {

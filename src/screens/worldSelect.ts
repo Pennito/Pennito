@@ -1,5 +1,6 @@
 import { DatabaseSync } from '../network/sync.js';
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../utils/constants.js';
+import { isMobile } from '../utils/mobile.js';
 
 export type WorldSelectResult = {
   worldName: string;
@@ -15,6 +16,7 @@ export class WorldSelectScreen {
   private onWorldSelected: (worldName: string, isNew: boolean) => void;
   private dbSync: DatabaseSync;
   private username: string;
+  private worldNameInput: HTMLInputElement | null = null;
 
   constructor(
     canvas: HTMLCanvasElement,
@@ -29,6 +31,81 @@ export class WorldSelectScreen {
 
     this.loadRecentWorlds();
     this.setupInput();
+    if (isMobile()) {
+      this.createMobileInput();
+    }
+  }
+
+  private createMobileInput(): void {
+    const canvasRect = this.canvas.getBoundingClientRect();
+    const centerX = CANVAS_WIDTH / 2;
+    const centerY = CANVAS_HEIGHT / 2;
+    const isIOS = /iphone|ipad|ipod/.test(navigator.userAgent.toLowerCase());
+
+    this.worldNameInput = document.createElement('input');
+    this.worldNameInput.type = 'text';
+    this.worldNameInput.placeholder = 'Enter world name (letters/numbers only)...';
+    this.worldNameInput.autocomplete = 'off';
+    this.worldNameInput.inputMode = 'text';
+    (this.worldNameInput as any).autocapitalize = 'none';
+    (this.worldNameInput as any).autocorrect = 'off';
+    this.worldNameInput.spellcheck = false;
+    this.worldNameInput.maxLength = 8;
+    this.worldNameInput.style.cssText = `
+      position: fixed;
+      left: ${canvasRect.left + centerX - 200}px;
+      top: ${canvasRect.top + centerY - 100}px;
+      width: 400px;
+      height: ${isIOS ? '44px' : '40px'};
+      font-size: 20px;
+      font-family: monospace;
+      padding: ${isIOS ? '0 12px' : '0 10px'};
+      border: 3px solid #5C6BC0;
+      border-radius: 0;
+      background: #FFFFFF;
+      color: #212121;
+      z-index: 10000;
+      box-sizing: border-box;
+      touch-action: manipulation;
+      -webkit-appearance: none;
+      -webkit-tap-highlight-color: transparent;
+      opacity: 0;
+      pointer-events: auto;
+    `;
+
+    this.worldNameInput.addEventListener('input', (e) => {
+      const target = e.target as HTMLInputElement;
+      const value = target.value.replace(/[^a-zA-Z0-9]/g, '').slice(0, 8);
+      this.worldName = value;
+      target.value = value;
+    });
+
+    this.worldNameInput.addEventListener('focus', () => {
+      this.worldNameInput?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
+
+    this.worldNameInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        this.submit();
+      }
+    });
+
+    document.body.appendChild(this.worldNameInput);
+
+    // Sync canvas click to focus input
+    this.canvas.addEventListener('click', (e) => {
+      const rect = this.canvas.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+      const centerX = CANVAS_WIDTH / 2;
+      const centerY = CANVAS_HEIGHT / 2;
+      
+      // If clicking on world name input area, focus the hidden input
+      if (x >= centerX - 200 && x <= centerX + 200 && y >= centerY - 100 && y <= centerY - 60) {
+        this.worldNameInput?.focus();
+      }
+    });
   }
 
   private async loadRecentWorlds(): Promise<void> {
@@ -237,7 +314,11 @@ export class WorldSelectScreen {
   }
 
   public cleanup(): void {
-    // Remove event listeners if needed
+    // Remove mobile input if it exists
+    if (this.worldNameInput) {
+      this.worldNameInput.remove();
+      this.worldNameInput = null;
+    }
   }
 }
 

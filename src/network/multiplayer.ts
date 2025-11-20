@@ -123,10 +123,25 @@ export class MultiplayerSync {
         if (status === 'SUBSCRIBED') {
           // Fetch current players after subscription is ready
           this.fetchCurrentPlayers();
+          // Start polling fallback (every 500ms) in case Realtime is slow
+          this.startPollingFallback();
         }
       });
     
     this.realtimeSubscription = channel;
+  }
+
+  private pollingInterval: number | null = null;
+
+  private startPollingFallback(): void {
+    // Poll for player updates every 1 second as a fallback if Realtime is slow
+    // This ensures we catch players leaving even if Realtime doesn't fire
+    if (this.pollingInterval) {
+      clearInterval(this.pollingInterval);
+    }
+    this.pollingInterval = window.setInterval(() => {
+      this.fetchCurrentPlayers();
+    }, 1000);
   }
 
   private async fetchCurrentPlayers(): Promise<void> {
@@ -144,23 +159,57 @@ export class MultiplayerSync {
       }
 
       if (data) {
+        // Get list of current player IDs from database
+        const currentPlayerIds = new Set<string>();
+        
+        // Update or add players from database
         data.forEach((player: any) => {
           if (player.user_id !== this.userId) {
-            this.otherPlayers.set(player.user_id, {
-              userId: player.user_id,
-              username: player.username,
-              x: player.x || 0,
-              y: player.y || 0,
-              equippedHat: player.equipped_hat,
-              equippedShirt: player.equipped_shirt,
-              equippedPants: player.equipped_pants,
-              equippedShoes: player.equipped_shoes,
-              equippedWings: player.equipped_wings,
-              lastUpdate: Date.now()
-            });
+            currentPlayerIds.add(player.user_id);
+            
+            // Check if player's last_seen is recent (within last 5 seconds)
+            const lastSeen = player.last_seen ? new Date(player.last_seen).getTime() : 0;
+            const now = Date.now();
+            const timeSinceLastSeen = now - lastSeen;
+            
+            // Only add/update if player was seen recently (within 5 seconds)
+            if (timeSinceLastSeen < 5000) {
+              this.otherPlayers.set(player.user_id, {
+                userId: player.user_id,
+                username: player.username,
+                x: player.x || 0,
+                y: player.y || 0,
+                equippedHat: player.equipped_hat,
+                equippedShirt: player.equipped_shirt,
+                equippedPants: player.equipped_pants,
+                equippedShoes: player.equipped_shoes,
+                equippedWings: player.equipped_wings,
+                lastUpdate: Date.now()
+              });
+            } else {
+              // Player hasn't been seen recently, remove them
+              console.log(`[MULTIPLAYER] 🚪 Removing ${player.username} (last_seen too old: ${timeSinceLastSeen}ms)`);
+              this.otherPlayers.delete(player.user_id);
+            }
           }
         });
+        
+        // Remove players that are no longer in the database
+        for (const [userId, player] of this.otherPlayers.entries()) {
+          if (!currentPlayerIds.has(userId)) {
+            console.log(`[MULTIPLAYER] 🚪 Removing ${player.username} (not in database)`);
+            this.otherPlayers.delete(userId);
+          }
+        }
+        
         this.notifyPlayersUpdate();
+      } else {
+        // No players in database, clear all
+        if (this.otherPlayers.size > 0) {
+          console.log('[MULTIPLAYER] 🚪 No players in database, clearing all');
+          this.otherPlayers.clear();
+          this.notifyPlayersUpdate();
+        }
       }
     } catch (error) {
       console.error('[MULTIPLAYER] Error fetching players:', error);
@@ -427,16 +476,21 @@ export class MultiplayerSync {
   }
 
   public getOtherPlayers(): OtherPlayer[] {
-    // Remove players that haven't updated in 3 seconds (disconnected)
+    // Remove players that haven't updated in 2 seconds (disconnected) - more aggressive
     const now = Date.now();
-    const timeout = 3000; // Reduced from 5s to 3s for faster cleanup
+    const timeout = 2000; // Reduced to 2s for faster cleanup
     
+    let removedAny = false;
     for (const [userId, player] of this.otherPlayers.entries()) {
       if (now - player.lastUpdate > timeout) {
-        console.log(`[MULTIPLAYER] 🚪 Player ${player.username} left (timeout)`);
+        console.log(`[MULTIPLAYER] 🚪 Player ${player.username} left (timeout: ${now - player.lastUpdate}ms)`);
         this.otherPlayers.delete(userId);
-        this.notifyPlayersUpdate();
+        removedAny = true;
       }
+    }
+    
+    if (removedAny) {
+      this.notifyPlayersUpdate();
     }
 
     return Array.from(this.otherPlayers.values());
@@ -447,16 +501,19 @@ export class MultiplayerSync {
     if (!this.supabase) return;
     
     try {
-      // Delete players that haven't been seen in 10 seconds
-      const tenSecondsAgo = new Date(Date.now() - 10000).toISOString();
+      // Delete players that haven't been seen in 5 seconds (more aggressive cleanup)
+      const fiveSecondsAgo = new Date(Date.now() - 5000).toISOString();
       const { error } = await this.supabase
         .from('active_players')
         .delete()
-        .lt('last_seen', tenSecondsAgo)
+        .lt('last_seen', fiveSecondsAgo)
         .neq('user_id', this.userId); // Don't delete ourselves
       
       if (error) {
         console.error('[MULTIPLAYER] Error cleaning up disconnected players:', error);
+      } else {
+        // After cleanup, refresh our local player list
+        this.fetchCurrentPlayers();
       }
     } catch (error) {
       console.error('[MULTIPLAYER] Error cleaning up disconnected players:', error);
@@ -468,6 +525,12 @@ export class MultiplayerSync {
     if (this.positionSyncInterval) {
       clearInterval(this.positionSyncInterval);
       this.positionSyncInterval = null;
+    }
+    
+    // Stop polling fallback
+    if (this.pollingInterval) {
+      clearInterval(this.pollingInterval);
+      this.pollingInterval = null;
     }
 
     // Unsubscribe from realtime

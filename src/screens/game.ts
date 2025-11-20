@@ -546,34 +546,39 @@ export class GameScreen {
     // Update mouse world position
     this.input.updateMouseWorld(this.camera.x, this.camera.y);
 
-    // Broadcast player position for multiplayer (throttled to every 100ms)
+    // Broadcast player position for multiplayer (throttled to every 50ms for faster sync)
     const now = Date.now();
-    if (now - this.lastPositionBroadcast > 100 && this.multiplayer) {
+    if (now - this.lastPositionBroadcast > 50 && this.multiplayer) {
       const playerData = this.player.getPlayerData();
-      this.multiplayer.broadcastPosition(this.player.x, this.player.y, playerData);
+      this.multiplayer.broadcastPosition(this.player.x, this.player.y, playerData).catch(err => {
+        console.error('[MULTIPLAYER] Error broadcasting position:', err);
+      });
       this.lastPositionBroadcast = now;
     }
     
-    // Periodically cleanup disconnected players (every 5 seconds)
-    if (this.multiplayer && now % 5000 < 100) {
+    // Periodically cleanup disconnected players (every 2 seconds for faster cleanup)
+    if (this.multiplayer && now % 2000 < 100) {
       this.multiplayer.cleanupDisconnectedPlayers().catch(console.error);
     }
 
-    // Check for item pickup
-    this.droppedItems = this.droppedItems.filter(item => {
+    // Check for item pickup (process one item per frame to prevent duplication)
+    const itemsToRemove: DroppedItem[] = [];
+    for (const item of this.droppedItems) {
       if (item.shouldPickup(this.player.x, this.player.y, this.player.width, this.player.height)) {
         if (item.tileType === TileType.GEM) {
           // Gems add to player's gem count, not inventory
           this.player.gems = Math.min(this.player.gems + item.gemValue, 1000000000);
           console.log(`[GEM] Picked up ${item.gemValue} gem(s)! Total: ${this.player.gems}`);
         } else {
-          // Regular items go to inventory
+          // Regular items go to inventory (only add once)
           this.player.addToInventory(item.tileType, 1);
+          console.log(`[PICKUP] Collected ${TileType[item.tileType]}`);
         }
-        return false; // remove
+        itemsToRemove.push(item);
       }
-      return true;
-    });
+    }
+    // Remove collected items
+    this.droppedItems = this.droppedItems.filter(item => !itemsToRemove.includes(item));
 
     // Handle mouse clicks (check UI first, then world)
     // Check if mouse button was just pressed (not held)
@@ -898,11 +903,13 @@ export class GameScreen {
 
     // Render dropped items before the player so items appear behind character
     for (const item of this.droppedItems) {
-      item.render(this.ctx, this.camera.x, this.camera.y);
+      item.render(this.ctx, this.camera.x, this.camera.y, this.ui);
     }
 
     // Render other players first (behind main player)
-    for (const otherPlayer of this.otherPlayers) {
+    // Get fresh list of other players (this filters out disconnected ones)
+    const otherPlayers = this.multiplayer ? this.multiplayer.getOtherPlayers() : [];
+    for (const otherPlayer of otherPlayers) {
       this.renderOtherPlayer(otherPlayer);
     }
 
@@ -1130,7 +1137,11 @@ export class GameScreen {
       }
     }
     
-    // Inventory expansion moved to shop menu - no click handling here
+    // Check for expand/collapse button click FIRST (before slot clicks)
+    if (this.ui.checkExpandButtonClick(x, y, this.player.maxInventorySlots)) {
+      this.ui.toggleInventoryExpansion();
+      return; // Consume click - don't process slot selection
+    }
     
     // Handle inventory slot clicks - clicking selects the item, double-clicking equips equipment
     const inventoryY = CANVAS_HEIGHT - 80;
@@ -1142,12 +1153,14 @@ export class GameScreen {
     const expansion = this.ui.isInventoryExpanded() ? 1 : 0;
     const currentY = baseY - (expansion * expandedHeight);
     
-    // Check if click is in inventory area
+    // Check if click is in inventory slot area (exclude expand button area)
     const maxRows = Math.ceil(this.player.maxInventorySlots / slotsPerRow);
     const visibleRows = Math.max(1, Math.ceil(1 + expansion * (maxRows - 1)));
-    const totalHeight = (visibleRows * 60) + 20;
+    const slotAreaHeight = visibleRows * 60; // Only slot area, not expand button
+    const expandButtonY = baseY - 5; // Expand button is above slots
     
-    if (y >= currentY && y <= currentY + totalHeight) {
+    // Only process slot clicks if not clicking on expand button area
+    if (y >= currentY && y <= currentY + slotAreaHeight && y < expandButtonY - 10) {
       const row = Math.floor((y - currentY) / 60);
       const col = Math.floor((x - startX) / slotWidth);
       
@@ -1259,7 +1272,7 @@ export class GameScreen {
     const centerX = CANVAS_WIDTH / 2;
     const centerY = CANVAS_HEIGHT / 2;
     const menuWidth = 300;
-    const menuHeight = 200;
+    const menuHeight = 220; // Increased height to fit world name
     const menuX = centerX - menuWidth / 2;
     const menuY = centerY - menuHeight / 2;
     
@@ -1280,10 +1293,16 @@ export class GameScreen {
     this.ctx.textAlign = 'center';
     this.ctx.fillText('Menu', centerX, menuY + 30);
     
+    // World name display
+    this.ctx.fillStyle = '#9E9E9E';
+    this.ctx.font = '14px monospace';
+    this.ctx.textAlign = 'center';
+    this.ctx.fillText(`World: ${this.worldName}`, centerX, menuY + 55);
+    
     // Options
     const options = ['Resume Game', 'Exit World', 'Logout'];
     const optionHeight = 40;
-    const startY = menuY + 60;
+    const startY = menuY + 80; // Moved down to make room for world name
     
     for (let i = 0; i < options.length; i++) {
       const y = startY + i * optionHeight;
@@ -1804,6 +1823,8 @@ export class GameScreen {
   private renderChat(): void {
     const startY = CANVAS_HEIGHT - 180; // Above inventory
     const messageHeight = 20;
+    const chatX = 10; // Fixed left position for symmetry
+    const chatWidth = 400; // Fixed width for consistent alignment
     
     // Render recent messages (fade out older ones)
     const now = Date.now();
@@ -1816,24 +1837,30 @@ export class GameScreen {
         const alpha = this.isChatOpen ? 1 : Math.max(0, 1 - age / fadeTime);
         const y = startY - (this.chatMessages.length - i - 1) * messageHeight;
         
-        // Background
+        // Background (centered/symmetrical)
         this.ctx.fillStyle = `rgba(0, 0, 0, ${alpha * 0.5})`;
-        this.ctx.fillRect(10, y - 16, 400, 18);
+        this.ctx.fillRect(chatX, y - 16, chatWidth, 18);
         
         // Check if sender is world owner
         const isOwner = this.world.getOwner() === msg.username;
         const usernameColor = isOwner ? '#00FF00' : '#FFD700';
         
-        // Username
-        this.ctx.fillStyle = `rgba(${parseInt(usernameColor.slice(1, 3), 16)}, ${parseInt(usernameColor.slice(3, 5), 16)}, ${parseInt(usernameColor.slice(5, 7), 16)}, ${alpha})`;
+        // Username (properly aligned)
+        this.ctx.fillStyle = usernameColor;
+        this.ctx.globalAlpha = alpha;
         this.ctx.font = 'bold 12px monospace';
         this.ctx.textAlign = 'left';
-        this.ctx.fillText(`${msg.username}:`, 15, y);
+        this.ctx.textBaseline = 'middle'; // Use middle baseline for consistent alignment
+        const usernameText = `${msg.username}:`;
+        this.ctx.fillText(usernameText, chatX + 5, y - 2);
         
-        // Message
-        this.ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`;
+        // Message (aligned after username with proper spacing)
+        this.ctx.fillStyle = '#FFFFFF';
         this.ctx.font = '12px monospace';
-        this.ctx.fillText(msg.text, 15 + this.ctx.measureText(`${msg.username}: `).width, y);
+        this.ctx.textBaseline = 'middle'; // Same baseline for alignment
+        const usernameWidth = this.ctx.measureText(usernameText).width;
+        this.ctx.fillText(msg.text, chatX + 5 + usernameWidth + 3, y - 2); // 3px spacing between username and message
+        this.ctx.globalAlpha = 1.0; // Reset alpha
       }
     }
     

@@ -1,6 +1,6 @@
 import { StorageManager } from '../utils/storage.js';
 import { DatabaseSync } from '../network/sync.js';
-import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../utils/constants.js';
+import { CANVAS_WIDTH, CANVAS_HEIGHT, GAME_VERSION } from '../utils/constants.js';
 
 export type LoginResult = {
   success: boolean;
@@ -485,6 +485,9 @@ export class LoginScreen {
 
   public render(): void {
     try {
+      // Log version for debugging
+      console.log(`[LOGIN-RENDER] Rendering login screen, version: ${GAME_VERSION}`);
+      
       // Update mobile input positions if canvas moved
       if (this.isMobile) {
         this.updateMobileInputPositions();
@@ -641,7 +644,7 @@ export class LoginScreen {
     this.ctx.fillStyle = '#757575';
     this.ctx.font = '14px monospace';
     this.ctx.textAlign = 'center';
-    this.ctx.fillText('Tab: Switch field | Enter: Submit', centerX, CANVAS_HEIGHT - 30);
+    this.ctx.fillText('Tab: Switch field | Enter: Submit', centerX, CANVAS_HEIGHT - 50);
     
     } catch (error) {
       console.error('Error rendering login screen:', error);
@@ -656,6 +659,21 @@ export class LoginScreen {
       this.ctx.textAlign = 'center';
       this.ctx.fillText('Login Screen Error - Check Console', CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2);
     }
+    
+    // Version display (bottom right) - ALWAYS render last, outside try-catch
+    const versionText = `v${GAME_VERSION}`;
+    console.log(`[LOGIN] Rendering version: ${versionText} at (${CANVAS_WIDTH - 10}, ${CANVAS_HEIGHT - 10})`);
+    
+    // Background box for visibility
+    this.ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+    this.ctx.fillRect(CANVAS_WIDTH - 80, CANVAS_HEIGHT - 25, 75, 18);
+    
+    // Version text
+    this.ctx.fillStyle = '#FFFFFF'; // White for visibility
+    this.ctx.font = 'bold 14px monospace';
+    this.ctx.textAlign = 'right';
+    this.ctx.textBaseline = 'alphabetic'; // Use alphabetic instead of bottom
+    this.ctx.fillText(versionText, CANVAS_WIDTH - 5, CANVAS_HEIGHT - 8);
   }
 
   // Reset function removed - only automatic reset on version updates

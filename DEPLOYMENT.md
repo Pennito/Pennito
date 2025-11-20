@@ -9,7 +9,7 @@ IPenno is a browser-based 2D sandbox game that can be deployed to any static web
 1. Install dependencies:
 ```bash
 npm install
-```
+```can u 
 
 2. Build the TypeScript code:
 ```bash

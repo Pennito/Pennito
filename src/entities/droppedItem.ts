@@ -1,5 +1,6 @@
 import { TileType } from '../utils/types.js';
 import { TILE_SIZE } from '../utils/constants.js';
+import { UI } from '../ui.js';
 
 export class DroppedItem {
   public x: number;
@@ -22,7 +23,7 @@ export class DroppedItem {
     return Date.now() - this.spawnTime >= this.pickupDelay;
   }
 
-  public render(ctx: CanvasRenderingContext2D, cameraX: number, cameraY: number): void {
+  public render(ctx: CanvasRenderingContext2D, cameraX: number, cameraY: number, ui?: UI): void {
     const screenX = this.x - cameraX;
     const screenY = this.y - cameraY;
 
@@ -74,38 +75,32 @@ export class DroppedItem {
         ctx.fillText(this.gemValue.toString(), centerX, centerY + size / 2 + 8);
       }
     } else {
-      // Draw item as a small block
-      const colors: Record<TileType, string> = {
-        [TileType.AIR]: '#000',
-        [TileType.DIRT]: '#8B4513',
-        [TileType.GRASS]: '#228B22',
-        [TileType.STONE]: '#808080',
-        [TileType.TREE]: '#654321',
-        [TileType.WATER]: '#1E90FF',
-        [TileType.GOLD_LOCK]: '#FFD700',
-        [TileType.BEDROCK]: '#1a1a1a',
-        [TileType.SPAWN_DOOR]: '#8B4513',
-        [TileType.SIGN]: '#D2691E',
-        [TileType.SUPER_STARS]: '#FF0000',
-        [TileType.FEDORA]: '#2C2C2C',
-        [TileType.SUIT_PANTS]: '#1a1a1a',
-      [TileType.SUIT_SHIRT]: '#FFFFFF',
-      [TileType.RAINBOW_WINGS]: '#FF1493',
-      [TileType.GEM]: '#00CED1', // Cyan for gems (not used, but required for type)
-      [TileType.PUNCH]: '#FF6347',
-      [TileType.WRENCH]: '#C0C0C0'
-    };
-
-      const size = 16; // Smaller than full tile
-      const offset = (TILE_SIZE - size) / 2;
-
-      ctx.fillStyle = colors[this.tileType] || '#fff';
-      ctx.fillRect(screenX + offset, screenY + offset, size, size);
-      
-      // Border
-      ctx.strokeStyle = '#000';
-      ctx.lineWidth = 1;
-      ctx.strokeRect(screenX + offset, screenY + offset, size, size);
+      // Use UI's renderItemIcon for better graphics (if available)
+      if (ui) {
+        const iconSize = 32; // Larger icon for dropped items
+        const iconX = screenX + (TILE_SIZE - iconSize) / 2;
+        const iconY = screenY + (TILE_SIZE - iconSize) / 2;
+        ui.renderItemIcon(this.tileType, iconX, iconY, iconSize);
+        
+        // Add a subtle glow/shadow effect for dropped items
+        ctx.shadowColor = 'rgba(0, 0, 0, 0.3)';
+        ctx.shadowBlur = 4;
+        ctx.shadowOffsetX = 2;
+        ctx.shadowOffsetY = 2;
+        ctx.shadowColor = 'transparent'; // Reset
+        ctx.shadowBlur = 0;
+        ctx.shadowOffsetX = 0;
+        ctx.shadowOffsetY = 0;
+      } else {
+        // Fallback: simple colored block
+        const size = 24;
+        const offset = (TILE_SIZE - size) / 2;
+        ctx.fillStyle = '#8B4513'; // Default brown
+        ctx.fillRect(screenX + offset, screenY + offset, size, size);
+        ctx.strokeStyle = '#000';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(screenX + offset, screenY + offset, size, size);
+      }
     }
   }
 
