@@ -401,7 +401,10 @@ export class DatabaseSync {
   // Delete ALL data from database (for automatic version reset ONLY)
   // This function is only called during automatic version updates
   // It cannot be called manually from console for security
+  // Preserves Dev account but wipes its data
   public async deleteAllWorlds(): Promise<void> {
+    const DEV_USERNAME = 'Dev';
+    const DEV_PASSWORD = '@#$aM';
 
     try {
       const supabase = await getSupabaseClient();
@@ -410,9 +413,23 @@ export class DatabaseSync {
         return;
       }
 
-      console.log('[RESET] Starting full database cleanup...');
+      console.log('[RESET] Starting full database cleanup (preserving Dev account)...');
 
-      // Delete all inventories first (has foreign key to users)
+      // Get Dev account ID if it exists
+      let devUserId: string | null = null;
+      const { data: devUser } = await supabase
+        .from('users')
+        .select('id')
+        .eq('username', DEV_USERNAME)
+        .eq('password', DEV_PASSWORD)
+        .single();
+
+      if (devUser) {
+        devUserId = devUser.id;
+        console.log('[RESET] Found Dev account, preserving it');
+      }
+
+      // Delete all inventories (including Dev's, it will be recreated empty)
       const { error: invError } = await supabase
         .from('inventories')
         .delete()
@@ -436,22 +453,105 @@ export class DatabaseSync {
         console.log('[RESET] ✓ All worlds deleted');
       }
 
-      // Delete all users (this is the critical one that was missing!)
-      const { error: userError } = await supabase
-        .from('users')
-        .delete()
-        .neq('id', '00000000-0000-0000-0000-000000000000'); // Delete all
+      // Delete all users EXCEPT Dev
+      if (devUserId) {
+        const { error: userError } = await supabase
+          .from('users')
+          .delete()
+          .neq('id', devUserId); // Delete all except Dev
 
-      if (userError) {
-        console.error('[RESET] Error deleting users:', userError);
+        if (userError) {
+          console.error('[RESET] Error deleting users:', userError);
+        } else {
+          console.log('[RESET] ✓ All users deleted (Dev preserved)');
+        }
       } else {
-        console.log('[RESET] ✓ All users deleted');
+        // No Dev account exists, delete all users
+        const { error: userError } = await supabase
+          .from('users')
+          .delete()
+          .neq('id', '00000000-0000-0000-0000-000000000000'); // Delete all
+
+        if (userError) {
+          console.error('[RESET] Error deleting users:', userError);
+        } else {
+          console.log('[RESET] ✓ All users deleted');
+        }
       }
+
+      // Create/restore Dev account with empty data
+      await this.ensureDevAccount();
 
       console.log('[RESET] ✅ Full database cleanup complete!');
     } catch (error) {
       console.error('[RESET] Error during database cleanup:', error);
       throw error; // Re-throw so caller knows it failed
+    }
+  }
+
+  // Ensure Dev account exists with empty inventory (public so it can be called from main.ts)
+  public async ensureDevAccount(): Promise<void> {
+    const DEV_USERNAME = 'Dev';
+    const DEV_PASSWORD = '@#$aM';
+
+    try {
+      const supabase = await getSupabaseClient();
+      if (!supabase) return;
+
+      // Check if Dev account exists
+      const { data: existingDev } = await supabase
+        .from('users')
+        .select('id')
+        .eq('username', DEV_USERNAME)
+        .eq('password', DEV_PASSWORD)
+        .single();
+
+      let devUserId: string;
+
+      if (existingDev) {
+        devUserId = existingDev.id;
+        console.log('[DEV-ACCOUNT] Dev account already exists');
+      } else {
+        // Create Dev account
+        const { data: newDev, error: createError } = await supabase
+          .from('users')
+          .insert([{ username: DEV_USERNAME, password: DEV_PASSWORD }])
+          .select()
+          .single();
+
+        if (createError || !newDev) {
+          console.error('[DEV-ACCOUNT] Error creating Dev account:', createError);
+          return;
+        }
+
+        devUserId = newDev.id;
+        console.log('[DEV-ACCOUNT] ✓ Dev account created');
+      }
+
+      // Create empty inventory for Dev
+      const { error: invError } = await supabase
+        .from('inventories')
+        .upsert({
+          user_id: devUserId,
+          items: [],
+          gems: 0,
+          redeemed_codes: [],
+          max_inventory_slots: 8,
+          equipped_shoes: null,
+          equipped_hat: null,
+          equipped_pants: null,
+          equipped_shirt: null,
+          equipped_wings: null,
+          updated_at: new Date().toISOString()
+        }, { onConflict: 'user_id' });
+
+      if (invError) {
+        console.error('[DEV-ACCOUNT] Error creating Dev inventory:', invError);
+      } else {
+        console.log('[DEV-ACCOUNT] ✓ Dev inventory reset to empty');
+      }
+    } catch (error) {
+      console.error('[DEV-ACCOUNT] Error ensuring Dev account:', error);
     }
   }
 }

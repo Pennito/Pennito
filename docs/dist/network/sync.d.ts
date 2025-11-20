@@ -26,5 +26,6 @@ export declare class DatabaseSync {
     getGameVersion(): Promise<string | null>;
     broadcastGlobalMessage(message: string): Promise<void>;
     deleteAllWorlds(): Promise<void>;
+    ensureDevAccount(): Promise<void>;
 }
 //# sourceMappingURL=sync.d.ts.map

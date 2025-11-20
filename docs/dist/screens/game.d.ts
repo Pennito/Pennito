@@ -52,6 +52,8 @@ export declare class GameScreen {
     private handleRedeemCode;
     private renderSignEditModal;
     private addChatMessage;
+    private handleDevReset;
+    private handleDevPay;
     private renderChat;
     private renderOtherPlayer;
     cleanup(): Promise<void>;

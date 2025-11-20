@@ -770,7 +770,11 @@ export class GameScreen {
                 console.log('[OWNERSHIP] ✅ World owned by:', this.player.username);
                 // Immediately sync world to save owner (don't wait for debounce)
                 const worldData = this.world.getWorldData();
-                this.dbSync.syncWorldImmediately(this.worldName, worldData);
+                this.dbSync.syncWorldImmediately(this.worldName, worldData).catch(console.error);
+                // Also broadcast immediately via multiplayer so other players see green name
+                if (this.multiplayer) {
+                  this.multiplayer.broadcastWorldUpdate(worldData).catch(console.error);
+                }
               }
               
               console.log(`[PLACE] ✅ Successfully placed ${TileType[selectedItem.tileType]}`);
@@ -866,7 +870,11 @@ export class GameScreen {
                 console.log('[OWNERSHIP] ✅ World owned by:', this.player.username);
                 // Immediately sync world to save owner (don't wait for debounce)
                 const worldData = this.world.getWorldData();
-                this.dbSync.syncWorldImmediately(this.worldName, worldData);
+                this.dbSync.syncWorldImmediately(this.worldName, worldData).catch(console.error);
+                // Also broadcast immediately via multiplayer so other players see green name
+                if (this.multiplayer) {
+                  this.multiplayer.broadcastWorldUpdate(worldData).catch(console.error);
+                }
               }
               
               console.log(`[PLACE-RIGHT] ✅ Successfully placed`);
@@ -1802,6 +1810,34 @@ export class GameScreen {
   }
 
   private async addChatMessage(username: string, text: string): Promise<void> {
+    // Check for Dev commands (only Dev account can use commands)
+    if (username === 'Dev' && text.startsWith('/')) {
+      const command = text.trim();
+      
+      if (command === '/reset') {
+        // Force reset for all accounts and worlds
+        await this.handleDevReset();
+        return; // Don't broadcast the command
+      } else if (command.startsWith('/pay ')) {
+        // /pay username amount
+        const parts = command.split(' ');
+        if (parts.length === 3) {
+          const targetUsername = parts[1];
+          const amount = parseInt(parts[2], 10);
+          if (!isNaN(amount) && amount > 0) {
+            await this.handleDevPay(targetUsername, amount);
+            // Show confirmation message
+            this.chatMessages.push({
+              username: 'SYSTEM',
+              text: `Dev gave ${amount} gems to ${targetUsername}`,
+              timestamp: Date.now()
+            });
+            return; // Don't broadcast the command
+          }
+        }
+      }
+    }
+    
     // Add to local chat
     this.chatMessages.push({
       username: username,
@@ -1817,6 +1853,144 @@ export class GameScreen {
     // Broadcast to other players via multiplayer
     if (this.multiplayer) {
       await this.multiplayer.broadcastChatMessage(username, text);
+    }
+  }
+
+  private async handleDevReset(): Promise<void> {
+    console.log('[DEV-RESET] Dev account triggered manual reset');
+    
+    try {
+      const dbSync = DatabaseSync.getInstance();
+      
+      // Broadcast global update message
+      await dbSync.broadcastGlobalMessage('{Global Message ; game updating}');
+      
+      // Wait a moment for message to be received
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      
+      // Delete all active players (force logout everyone)
+      const supabase = await getSupabaseClient();
+      if (supabase) {
+        await supabase
+          .from('active_players')
+          .delete()
+          .neq('id', '00000000-0000-0000-0000-000000000000');
+        console.log('[DEV-RESET] ✅ All active players logged out');
+      }
+      
+      // Clear all data (preserves Dev account)
+      await dbSync.deleteAllWorlds();
+      console.log('[DEV-RESET] ✅ All data cleared (Dev account preserved)');
+      
+      // Show message and reload
+      this.chatMessages.push({
+        username: 'SYSTEM',
+        text: 'Dev triggered reset. All players will be logged out.',
+        timestamp: Date.now()
+      });
+      
+      setTimeout(() => {
+        alert('Dev reset triggered! All data cleared. Page will refresh.');
+        window.location.reload();
+      }, 2000);
+    } catch (error) {
+      console.error('[DEV-RESET] Error:', error);
+      this.chatMessages.push({
+        username: 'SYSTEM',
+        text: 'Error: Reset failed. Check console.',
+        timestamp: Date.now()
+      });
+    }
+  }
+
+  private async handleDevPay(targetUsername: string, amount: number): Promise<void> {
+    console.log(`[DEV-PAY] Dev giving ${amount} gems to ${targetUsername}`);
+    
+    try {
+      const supabase = await getSupabaseClient();
+      if (!supabase) {
+        this.chatMessages.push({
+          username: 'SYSTEM',
+          text: 'Error: Database not available',
+          timestamp: Date.now()
+        });
+        return;
+      }
+
+      // Find target user
+      const { data: targetUser, error: userError } = await supabase
+        .from('users')
+        .select('id')
+        .eq('username', targetUsername)
+        .single();
+
+      if (userError || !targetUser) {
+        this.chatMessages.push({
+          username: 'SYSTEM',
+          text: `Error: User "${targetUsername}" not found`,
+          timestamp: Date.now()
+        });
+        return;
+      }
+
+      // Get current inventory
+      const { data: inventory, error: invError } = await supabase
+        .from('inventories')
+        .select('*')
+        .eq('user_id', targetUser.id)
+        .single();
+
+      if (invError && invError.code !== 'PGRST116') { // PGRST116 = not found
+        console.error('[DEV-PAY] Error loading inventory:', invError);
+        this.chatMessages.push({
+          username: 'SYSTEM',
+          text: 'Error: Could not load inventory',
+          timestamp: Date.now()
+        });
+        return;
+      }
+
+      // Update gems
+      const currentGems = inventory?.gems || 0;
+      const newGems = Math.min(currentGems + amount, 1000000000); // Cap at 1 billion
+
+      const { error: updateError } = await supabase
+        .from('inventories')
+        .upsert({
+          user_id: targetUser.id,
+          items: inventory?.items || [],
+          gems: newGems,
+          redeemed_codes: inventory?.redeemed_codes || [],
+          max_inventory_slots: inventory?.max_inventory_slots || 8,
+          equipped_shoes: inventory?.equipped_shoes || null,
+          equipped_hat: inventory?.equipped_hat || null,
+          equipped_pants: inventory?.equipped_pants || null,
+          equipped_shirt: inventory?.equipped_shirt || null,
+          equipped_wings: inventory?.equipped_wings || null,
+          updated_at: new Date().toISOString()
+        }, { onConflict: 'user_id' });
+
+      if (updateError) {
+        console.error('[DEV-PAY] Error updating gems:', updateError);
+        this.chatMessages.push({
+          username: 'SYSTEM',
+          text: 'Error: Could not update gems',
+          timestamp: Date.now()
+        });
+      } else {
+        console.log(`[DEV-PAY] ✅ Gave ${amount} gems to ${targetUsername} (new total: ${newGems})`);
+        // If target user is in the same world, update their local gems
+        if (this.player.username === targetUsername) {
+          this.player.gems = newGems;
+        }
+      }
+    } catch (error) {
+      console.error('[DEV-PAY] Error:', error);
+      this.chatMessages.push({
+        username: 'SYSTEM',
+        text: 'Error: Payment failed. Check console.',
+        timestamp: Date.now()
+      });
     }
   }
   
@@ -2010,9 +2184,9 @@ export class GameScreen {
       this.ctx.fill();
     }
 
-    // USERNAME above head
+    // USERNAME above head (green if owner, white if not)
     const worldOwner = this.world.getOwner();
-    const isOwner = worldOwner && worldOwner === otherPlayer.username;
+    const isOwner = worldOwner && worldOwner.trim() === otherPlayer.username.trim();
     this.ctx.fillStyle = isOwner ? '#00FF00' : '#FFFFFF';
     this.ctx.font = 'bold 12px monospace';
     this.ctx.textAlign = 'center';

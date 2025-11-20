@@ -234,9 +234,9 @@ async function checkVersionReset(): Promise<void> {
         console.error('[AUTO-RESET] Error during player logout:', error);
       }
       
-      // Then clear all data (users, worlds, inventories)
+      // Then clear all data (users, worlds, inventories) - Dev account is preserved
       await dbSync.deleteAllWorlds();
-      console.log('[AUTO-RESET] ✅ All data cleared!');
+      console.log('[AUTO-RESET] ✅ All data cleared! (Dev account preserved)');
       
       // Store new version
       localStorage.setItem(STORAGE_KEY, GAME_VERSION);
@@ -279,8 +279,11 @@ async function initApp() {
   // Check version and auto-reset if needed FIRST (before anything else)
   await checkVersionReset();
   
-  // Store current version in Supabase (for remote version checking)
+  // Ensure Dev account exists (even if no reset happened)
   const dbSync = DatabaseSync.getInstance();
+  await dbSync.ensureDevAccount();
+  
+  // Store current version in Supabase (for remote version checking)
   await dbSync.setGameVersion(GAME_VERSION);
   
   const canvas = document.getElementById('gameCanvas') as HTMLCanvasElement;
