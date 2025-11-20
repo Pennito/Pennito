@@ -1,10 +1,9 @@
 #!/bin/bash
 
-# Quick deployment script for IPenno
-echo "🚀 Deploying IPenno Game..."
+# IPenno Deployment Script for GitHub Pages
+# This script builds the game and updates the docs folder
 
-# Build the game
-echo "📦 Building game..."
+echo "🚀 Building IPenno..."
 npm run build
 
 if [ $? -ne 0 ]; then
@@ -12,20 +11,15 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 
-echo "✅ Build successful!"
-echo ""
-echo "📋 Next steps:"
-echo "1. For GitHub Pages:"
-echo "   - Create a GitHub repository"
-echo "   - Push this folder to GitHub"
-echo "   - Enable GitHub Pages in repository settings"
-echo ""
-echo "2. For Netlify Drop:"
-echo "   - Go to https://app.netlify.com/drop"
-echo "   - Drag this entire folder onto the page"
-echo ""
-echo "3. For Vercel:"
-echo "   - Run: npx vercel"
-echo ""
-echo "See DEPLOY_NOW.md for detailed instructions!"
+echo "📦 Copying files to docs folder..."
+cp -r dist docs/
+cp index.html docs/
 
+echo "✅ Files copied to docs folder"
+echo ""
+echo "📝 Next steps:"
+echo "1. Review changes: git status"
+echo "2. Commit: git add docs/ && git commit -m 'Update game'"
+echo "3. Push: git push origin main"
+echo ""
+echo "GitHub Pages will automatically update in 1-2 minutes!"
