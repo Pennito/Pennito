@@ -205,54 +205,78 @@ async function checkVersionReset(): Promise<void> {
     console.log(`[AUTO-RESET] 🔄 Version changed: ${storedVersion || 'none'} → ${GAME_VERSION}`);
     console.log('[AUTO-RESET] Broadcasting update message, logging out everyone, and performing reset...');
     
-    try {
-      const dbSync = DatabaseSync.getInstance();
-      
-      // First, broadcast global update message to all active players
-      await dbSync.broadcastGlobalMessage('{Global Message ; game updating}');
-      
-      // Wait a moment for message to be received
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      
-      // Delete all active players (force logout everyone)
+    // Add timeout to prevent hanging
+    const resetPromise = (async () => {
       try {
-        const { getSupabaseClient } = await import('./network/supabase.js');
-        const supabase = await getSupabaseClient();
-        if (supabase) {
-          const { error: deleteError } = await supabase
-            .from('active_players')
-            .delete()
-            .neq('id', '00000000-0000-0000-0000-000000000000'); // Delete all
-          
-          if (deleteError) {
-            console.error('[AUTO-RESET] Error deleting active players:', deleteError);
-          } else {
+        const dbSync = DatabaseSync.getInstance();
+        
+        // First, broadcast global update message to all active players (with timeout)
+        try {
+          await Promise.race([
+            dbSync.broadcastGlobalMessage('{Global Message ; game updating}'),
+            new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 5000))
+          ]);
+        } catch (error) {
+          console.warn('[AUTO-RESET] Broadcast timeout or error (continuing anyway):', error);
+        }
+        
+        // Wait a moment for message to be received
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        
+        // Delete all active players (force logout everyone) - with timeout
+        try {
+          const { getSupabaseClient } = await import('./network/supabase.js');
+          const supabase = await getSupabaseClient();
+          if (supabase) {
+            await Promise.race([
+              supabase.from('active_players').delete().neq('id', '00000000-0000-0000-0000-000000000000'),
+              new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 5000))
+            ]);
             console.log('[AUTO-RESET] ✅ All active players logged out');
           }
+        } catch (error) {
+          console.warn('[AUTO-RESET] Error during player logout (continuing anyway):', error);
         }
+        
+        // Then clear all data (users, worlds, inventories) - Dev account is preserved - with timeout
+        try {
+          await Promise.race([
+            dbSync.deleteAllWorlds(),
+            new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 10000))
+          ]);
+          console.log('[AUTO-RESET] ✅ All data cleared! (Dev account preserved)');
+        } catch (error) {
+          console.warn('[AUTO-RESET] Error clearing data (continuing anyway):', error);
+        }
+        
+        // Store new version
+        localStorage.setItem(STORAGE_KEY, GAME_VERSION);
+        console.log(`[AUTO-RESET] Version ${GAME_VERSION} stored`);
+        
+        // Force logout and refresh
+        console.log('[AUTO-RESET] Forcing page refresh...');
+        alert(`Game updated to v${GAME_VERSION}!\n\nAll players have been logged out.\nThe page will refresh now.`);
+        window.location.reload();
       } catch (error) {
-        console.error('[AUTO-RESET] Error during player logout:', error);
+        console.error('[AUTO-RESET] Error during automatic reset:', error);
+        // Still store version to prevent infinite loops
+        localStorage.setItem(STORAGE_KEY, GAME_VERSION);
+        // Force refresh anyway
+        alert(`Game updated to v${GAME_VERSION}!\n\nThe page will refresh now.`);
+        window.location.reload();
       }
-      
-      // Then clear all data (users, worlds, inventories) - Dev account is preserved
-      await dbSync.deleteAllWorlds();
-      console.log('[AUTO-RESET] ✅ All data cleared! (Dev account preserved)');
-      
-      // Store new version
-      localStorage.setItem(STORAGE_KEY, GAME_VERSION);
-      console.log(`[AUTO-RESET] Version ${GAME_VERSION} stored`);
-      
-      // Force logout and refresh
-      console.log('[AUTO-RESET] Forcing page refresh...');
-      alert(`Game updated to v${GAME_VERSION}!\n\nAll players have been logged out.\nThe page will refresh now.`);
-      window.location.reload();
+    })();
+    
+    // Overall timeout of 15 seconds - if reset takes too long, just store version and continue
+    try {
+      await Promise.race([
+        resetPromise,
+        new Promise((_, reject) => setTimeout(() => reject(new Error('Reset timeout')), 15000))
+      ]);
     } catch (error) {
-      console.error('[AUTO-RESET] Error during automatic reset:', error);
-      // Still store version to prevent infinite loops
+      console.warn('[AUTO-RESET] Reset timed out, storing version and continuing:', error);
       localStorage.setItem(STORAGE_KEY, GAME_VERSION);
-      // Force refresh anyway
-      alert(`Game updated to v${GAME_VERSION}!\n\nThe page will refresh now.`);
-      window.location.reload();
+      // Don't reload - just continue with game initialization
     }
   } else {
     console.log(`[AUTO-RESET] Version ${GAME_VERSION} matches stored version - no reset needed`);
@@ -277,14 +301,32 @@ async function initApp() {
   console.log(`[INIT] Game version: ${GAME_VERSION}`);
   
   // Check version and auto-reset if needed FIRST (before anything else)
-  await checkVersionReset();
+  // Add timeout to prevent hanging
+  try {
+    await Promise.race([
+      checkVersionReset(),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('Version check timeout')), 20000))
+    ]);
+  } catch (error) {
+    console.warn('[INIT] Version check timed out or failed, continuing anyway:', error);
+  }
   
-  // Ensure Dev account exists (even if no reset happened)
-  const dbSync = DatabaseSync.getInstance();
-  await dbSync.ensureDevAccount();
-  
-  // Store current version in Supabase (for remote version checking)
-  await dbSync.setGameVersion(GAME_VERSION);
+  // Ensure Dev account exists (even if no reset happened) - with timeout
+  try {
+    const dbSync = DatabaseSync.getInstance();
+    await Promise.race([
+      dbSync.ensureDevAccount(),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('Dev account check timeout')), 5000))
+    ]);
+    
+    // Store current version in Supabase (for remote version checking) - with timeout
+    await Promise.race([
+      dbSync.setGameVersion(GAME_VERSION),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('Set version timeout')), 5000))
+    ]);
+  } catch (error) {
+    console.warn('[INIT] Database operations timed out or failed, continuing anyway:', error);
+  }
   
   const canvas = document.getElementById('gameCanvas') as HTMLCanvasElement;
 
