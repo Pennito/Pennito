@@ -3,8 +3,8 @@ import { StorageManager } from '../utils/storage.js';
 import { WorldData, TileType } from '../utils/types.js';
 import { Item } from '../utils/types.js';
 
-// World sync debounce - sync every 3 seconds after changes
-const WORLD_SYNC_INTERVAL = 3000;
+// World sync debounce - OPTIMIZED: sync every 500ms for better real-time sync
+const WORLD_SYNC_INTERVAL = 500; // Reduced from 3000ms to 500ms for faster sync
 let worldSyncTimer: number | null = null;
 let pendingWorldData: WorldData | null = null;
 

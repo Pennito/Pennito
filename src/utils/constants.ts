@@ -1,7 +1,7 @@
 import { TileType } from './types.js';
 
 // Game version - increment this to force automatic reset on next load
-export const GAME_VERSION = '1.0.8'; // Updated for flame sword and inventory fix
+export const GAME_VERSION = '1.0.9'; // Updated for sync optimizations
 
 export const TILE_SIZE = 32;
 export const WORLD_WIDTH = 50;

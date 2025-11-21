@@ -134,15 +134,14 @@ export class MultiplayerSync {
   private pollingInterval: number | null = null;
 
   private startPollingFallback(): void {
-    // Poll for player updates every 2 seconds as a fallback if Realtime is slow
-    // This ensures we catch players leaving even if Realtime doesn't fire
-    // Reduced frequency to avoid overload
+    // OPTIMIZED: Poll less frequently (5 seconds) and only as true fallback
+    // Realtime should handle most updates, polling is just backup
     if (this.pollingInterval) {
       clearInterval(this.pollingInterval);
     }
     this.pollingInterval = window.setInterval(() => {
       this.fetchCurrentPlayers();
-    }, 2000); // Poll every 2 seconds instead of 1
+    }, 5000); // Reduced frequency to 5 seconds to reduce load
   }
 
   private async fetchCurrentPlayers(): Promise<void> {
@@ -263,8 +262,32 @@ export class MultiplayerSync {
     // This method is kept for compatibility but doesn't start an interval
   }
 
+  // OPTIMIZED: Batch position updates to reduce database load
+  private positionUpdateQueue: { x: number; y: number; playerData: PlayerData; timestamp: number }[] = [];
+  private positionUpdateTimer: number | null = null;
+  private readonly POSITION_BATCH_INTERVAL = 100; // Batch updates every 100ms
+
   public async broadcastPosition(x: number, y: number, playerData: PlayerData): Promise<void> {
     if (!this.supabase) return;
+
+    // Add to queue instead of immediate update
+    this.positionUpdateQueue.push({ x, y, playerData, timestamp: Date.now() });
+
+    // Schedule batch update if not already scheduled
+    if (!this.positionUpdateTimer) {
+      this.positionUpdateTimer = window.setTimeout(() => {
+        this.flushPositionUpdates();
+        this.positionUpdateTimer = null;
+      }, this.POSITION_BATCH_INTERVAL);
+    }
+  }
+
+  private async flushPositionUpdates(): Promise<void> {
+    if (!this.supabase || this.positionUpdateQueue.length === 0) return;
+
+    // Get the most recent position update
+    const latest = this.positionUpdateQueue[this.positionUpdateQueue.length - 1];
+    this.positionUpdateQueue = []; // Clear queue
 
     try {
       const { error } = await this.supabase
@@ -273,13 +296,13 @@ export class MultiplayerSync {
           user_id: this.userId,
           username: this.username,
           world_name: this.worldName,
-          x: x,
-          y: y,
-          equipped_hat: playerData.equippedHat,
-          equipped_shirt: playerData.equippedShirt,
-          equipped_pants: playerData.equippedPants,
-          equipped_shoes: playerData.equippedShoes,
-          equipped_wings: playerData.equippedWings,
+          x: latest.x,
+          y: latest.y,
+          equipped_hat: latest.playerData.equippedHat,
+          equipped_shirt: latest.playerData.equippedShirt,
+          equipped_pants: latest.playerData.equippedPants,
+          equipped_shoes: latest.playerData.equippedShoes,
+          equipped_wings: latest.playerData.equippedWings,
           last_seen: new Date().toISOString()
         }, {
           onConflict: 'user_id'
