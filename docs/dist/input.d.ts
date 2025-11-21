@@ -21,5 +21,6 @@ export declare class InputManager {
         x: number;
         y: number;
     };
+    clearKey(key: string): void;
 }
 //# sourceMappingURL=input.d.ts.map

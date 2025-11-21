@@ -243,18 +243,53 @@ export class WorldSelectScreen {
     this.ctx.textAlign = 'center';
     this.ctx.fillText(`Logged in as: ${this.username}`, centerX, centerY - 160);
 
-    // World name input
-    this.ctx.fillStyle = '#FFFFFF';
-    this.ctx.fillRect(centerX - 200, centerY - 100, 400, 40);
-    this.ctx.strokeStyle = '#5C6BC0';
-    this.ctx.lineWidth = 2;
-    this.ctx.strokeRect(centerX - 200, centerY - 100, 400, 40);
+    // World name input - improved styling
+    const inputWidth = 450;
+    const inputHeight = 50;
+    const inputX = centerX - inputWidth / 2;
+    const inputY = centerY - 100;
     
-    this.ctx.font = '20px monospace';
+    // Input background with shadow
+    this.ctx.fillStyle = 'rgba(0, 0, 0, 0.1)';
+    this.ctx.fillRect(inputX + 3, inputY + 3, inputWidth, inputHeight);
+    
+    this.ctx.fillStyle = '#FFFFFF';
+    this.ctx.fillRect(inputX, inputY, inputWidth, inputHeight);
+    
+    // Border with glow
+    this.ctx.strokeStyle = '#5C6BC0';
+    this.ctx.lineWidth = 3;
+    this.ctx.strokeRect(inputX, inputY, inputWidth, inputHeight);
+    
+    // Inner highlight
+    this.ctx.strokeStyle = '#7986CB';
+    this.ctx.lineWidth = 1;
+    this.ctx.strokeRect(inputX + 2, inputY + 2, inputWidth - 4, inputHeight - 4);
+    
+    // Text with proper clipping
+    this.ctx.font = '22px monospace';
     this.ctx.textAlign = 'left';
-    const worldText = this.worldName || 'Enter world name (letters/numbers only)...';
-    this.ctx.fillStyle = this.worldName ? '#212121' : '#9E9E9E';
-    this.ctx.fillText(worldText, centerX - 190, centerY - 70);
+    this.ctx.textBaseline = 'middle';
+    
+    const placeholderText = 'Enter world name (1-8 letters/numbers)...';
+    const displayText = this.worldName || placeholderText;
+    const textColor = this.worldName ? '#212121' : '#9E9E9E';
+    
+    // Clip text to fit in box
+    const maxTextWidth = inputWidth - 30;
+    let finalText = displayText;
+    const textMetrics = this.ctx.measureText(finalText);
+    
+    if (textMetrics.width > maxTextWidth) {
+      // Truncate with ellipsis
+      while (this.ctx.measureText(finalText + '...').width > maxTextWidth && finalText.length > 0) {
+        finalText = finalText.slice(0, -1);
+      }
+      finalText += '...';
+    }
+    
+    this.ctx.fillStyle = textColor;
+    this.ctx.fillText(finalText, inputX + 15, inputY + inputHeight / 2);
 
     // Error message
     if (this.errorMessage) {
@@ -264,16 +299,32 @@ export class WorldSelectScreen {
       this.ctx.fillText(this.errorMessage, centerX, centerY - 20);
     }
 
-    // Join/Create button
-    // World existence check is async - show generic button text
+    // Join/Create button - improved styling
     const buttonText = this.worldName.trim() ? 'Join/Create World' : 'Enter World Name';
+    const buttonWidth = 220;
+    const buttonHeight = 45;
+    const buttonX = centerX - buttonWidth / 2;
+    const buttonY = centerY + 40;
     
+    // Button shadow
+    this.ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
+    this.ctx.fillRect(buttonX + 3, buttonY + 3, buttonWidth, buttonHeight);
+    
+    // Button background
     this.ctx.fillStyle = '#5C6BC0';
-    this.ctx.fillRect(centerX - 100, centerY + 40, 200, 40);
+    this.ctx.fillRect(buttonX, buttonY, buttonWidth, buttonHeight);
+    
+    // Button border
+    this.ctx.strokeStyle = '#3F51B5';
+    this.ctx.lineWidth = 2;
+    this.ctx.strokeRect(buttonX, buttonY, buttonWidth, buttonHeight);
+    
+    // Button text
     this.ctx.fillStyle = '#FFFFFF';
-    this.ctx.font = '20px monospace';
+    this.ctx.font = 'bold 20px monospace';
     this.ctx.textAlign = 'center';
-    this.ctx.fillText(buttonText, centerX, centerY + 68);
+    this.ctx.textBaseline = 'middle';
+    this.ctx.fillText(buttonText, centerX, buttonY + buttonHeight / 2);
 
     // Recent worlds
     if (this.recentWorlds.length > 0) {
@@ -283,28 +334,57 @@ export class WorldSelectScreen {
       this.ctx.fillText('Recent Worlds:', centerX, centerY + 100);
 
       const recentStartY = centerY + 120;
+      const recentWidth = 420;
+      const recentHeight = 40;
       for (let i = 0; i < this.recentWorlds.length; i++) {
-        const worldY = recentStartY + i * 40;
+        const worldY = recentStartY + i * 45;
+        const recentX = centerX - recentWidth / 2;
+        
+        // Shadow
+        this.ctx.fillStyle = 'rgba(0, 0, 0, 0.1)';
+        this.ctx.fillRect(recentX + 2, worldY + 2, recentWidth, recentHeight);
+        
+        // Background
         this.ctx.fillStyle = '#FFFFFF';
-        this.ctx.fillRect(centerX - 200, worldY, 400, 35);
+        this.ctx.fillRect(recentX, worldY, recentWidth, recentHeight);
+        
+        // Border
         this.ctx.strokeStyle = '#5C6BC0';
         this.ctx.lineWidth = 2;
-        this.ctx.strokeRect(centerX - 200, worldY, 400, 35);
+        this.ctx.strokeRect(recentX, worldY, recentWidth, recentHeight);
         
+        // Text
         this.ctx.fillStyle = '#3F51B5';
-        this.ctx.font = '16px monospace';
+        this.ctx.font = 'bold 18px monospace';
         this.ctx.textAlign = 'center';
-        this.ctx.fillText(this.recentWorlds[i], centerX, worldY + 25);
+        this.ctx.textBaseline = 'middle';
+        this.ctx.fillText(this.recentWorlds[i], centerX, worldY + recentHeight / 2);
       }
     }
 
-    // Logout button
+    // Logout button - improved styling
+    const logoutWidth = 110;
+    const logoutHeight = 35;
+    
+    // Shadow
+    this.ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
+    this.ctx.fillRect(23, 23, logoutWidth, logoutHeight);
+    
+    // Background
     this.ctx.fillStyle = '#E57373';
-    this.ctx.fillRect(20, 20, 100, 30);
+    this.ctx.fillRect(20, 20, logoutWidth, logoutHeight);
+    
+    // Border
+    this.ctx.strokeStyle = '#C62828';
+    this.ctx.lineWidth = 2;
+    this.ctx.strokeRect(20, 20, logoutWidth, logoutHeight);
+    
+    // Text
     this.ctx.fillStyle = '#FFFFFF';
-    this.ctx.font = '14px monospace';
+    this.ctx.font = 'bold 15px monospace';
     this.ctx.textAlign = 'center';
-    this.ctx.fillText('Log Out', 70, 42);
+    this.ctx.textBaseline = 'middle';
+    this.ctx.fillText('Log Out', 20 + logoutWidth / 2, 20 + logoutHeight / 2);
 
     // Instructions
     this.ctx.fillStyle = '#7986CB';

@@ -152,5 +152,14 @@ export class InputManager {
       y: Math.floor(this.mouseWorldY / tileSize)
     };
   }
+
+  public clearKey(key: string): void {
+    const keyLower = key.toLowerCase();
+    this.keys.delete(keyLower);
+    this.keyPresses.delete(keyLower);
+    if (key === ' ') {
+      this.spacePressed = false;
+    }
+  }
 }
 

@@ -140,5 +140,13 @@ export class InputManager {
             y: Math.floor(this.mouseWorldY / tileSize)
         };
     }
+    clearKey(key) {
+        const keyLower = key.toLowerCase();
+        this.keys.delete(keyLower);
+        this.keyPresses.delete(keyLower);
+        if (key === ' ') {
+            this.spacePressed = false;
+        }
+    }
 }
 //# sourceMappingURL=input.js.map

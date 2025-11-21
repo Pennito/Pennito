@@ -123,6 +123,8 @@ export class GameScreen {
             this.chatInput = '';
           }
           this.isChatOpen = false;
+          // CRITICAL: Clear space key to prevent jump bug
+          this.input.clearKey(' ');
           // Hide mobile keyboard if open
           if (this.input.mobileControls) {
             this.input.mobileControls.hideKeyboard();
@@ -130,6 +132,8 @@ export class GameScreen {
         } else if (e.key === 'Escape') {
           this.isChatOpen = false;
           this.chatInput = '';
+          // CRITICAL: Clear space key to prevent jump bug
+          this.input.clearKey(' ');
           // Hide mobile keyboard if open
           if (this.input.mobileControls) {
             this.input.mobileControls.hideKeyboard();
@@ -146,6 +150,8 @@ export class GameScreen {
           e.stopPropagation();
           this.isChatOpen = true;
           this.chatInput = '';
+          // CRITICAL: Clear space key to prevent jump bug when typing
+          this.input.clearKey(' ');
           // Show mobile keyboard if on mobile
           if (this.input.mobileControls && this.input.mobileControls.isMobileDevice()) {
             this.input.mobileControls.showKeyboard((text) => {
@@ -2075,27 +2081,43 @@ export class GameScreen {
     // Render chat input if open (only show on desktop, mobile uses virtual keyboard)
     if (this.isChatOpen && (!this.input.mobileControls || !this.input.mobileControls.isMobileDevice())) {
       const inputY = startY + 10;
-      const inputHeight = 30;
+      const inputHeight = 35;
+      const inputWidth = Math.min(600, CANVAS_WIDTH - 20); // Wider input box, max 600px
       
-      // Background
-      this.ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
-      this.ctx.fillRect(10, inputY, 500, inputHeight);
+      // Background with rounded corners effect
+      this.ctx.fillStyle = 'rgba(0, 0, 0, 0.85)';
+      this.ctx.fillRect(10, inputY, inputWidth, inputHeight);
       
-      // Border
+      // Border with glow effect
       this.ctx.strokeStyle = '#FFD700';
-      this.ctx.lineWidth = 2;
-      this.ctx.strokeRect(10, inputY, 500, inputHeight);
+      this.ctx.lineWidth = 3;
+      this.ctx.strokeRect(10, inputY, inputWidth, inputHeight);
       
-      // Input text
+      // Input text with word wrapping
       this.ctx.fillStyle = '#fff';
-      this.ctx.font = '14px monospace';
+      this.ctx.font = '16px monospace';
       this.ctx.textAlign = 'left';
-      this.ctx.fillText(this.chatInput + '|', 15, inputY + 20);
+      this.ctx.textBaseline = 'middle';
+      
+      // Measure text to see if it fits
+      const maxTextWidth = inputWidth - 30; // Leave padding
+      const textMetrics = this.ctx.measureText(this.chatInput);
+      
+      if (textMetrics.width > maxTextWidth) {
+        // Text is too long, show truncated version with ellipsis
+        let displayText = this.chatInput;
+        while (this.ctx.measureText(displayText + '...').width > maxTextWidth && displayText.length > 0) {
+          displayText = displayText.slice(0, -1);
+        }
+        this.ctx.fillText(displayText + '...|', 20, inputY + inputHeight / 2);
+      } else {
+        this.ctx.fillText(this.chatInput + '|', 20, inputY + inputHeight / 2);
+      }
       
       // Hint
-      this.ctx.fillStyle = '#888';
-      this.ctx.font = '10px monospace';
-      this.ctx.fillText('Press Enter to send, Esc to cancel', 15, inputY + inputHeight + 12);
+      this.ctx.fillStyle = '#AAA';
+      this.ctx.font = '11px monospace';
+      this.ctx.fillText('Press Enter to send, Esc to cancel', 20, inputY + inputHeight + 15);
     }
   }
 
