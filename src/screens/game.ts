@@ -1950,11 +1950,29 @@ export class GameScreen {
         return;
       }
 
-      // Update gems
-      const currentGems = inventory?.gems || 0;
+      // Update gems - get current gems from inventory or users table
+      let currentGems = inventory?.gems || 0;
+      
+      // Also check users table for gems (in case it's stored there)
+      const { data: userData } = await supabase
+        .from('users')
+        .select('gems')
+        .eq('id', targetUser.id)
+        .single();
+      
+      if (userData && userData.gems !== null && userData.gems !== undefined) {
+        currentGems = userData.gems;
+      }
+      
       const newGems = Math.min(currentGems + amount, 1000000000); // Cap at 1 billion
 
-      const { error: updateError } = await supabase
+      // Update both users and inventories tables
+      const { error: userUpdateError } = await supabase
+        .from('users')
+        .update({ gems: newGems })
+        .eq('id', targetUser.id);
+
+      const { error: invUpdateError } = await supabase
         .from('inventories')
         .upsert({
           user_id: targetUser.id,
@@ -1970,8 +1988,8 @@ export class GameScreen {
           updated_at: new Date().toISOString()
         }, { onConflict: 'user_id' });
 
-      if (updateError) {
-        console.error('[DEV-PAY] Error updating gems:', updateError);
+      if (userUpdateError || invUpdateError) {
+        console.error('[DEV-PAY] Error updating gems:', userUpdateError || invUpdateError);
         this.chatMessages.push({
           username: 'SYSTEM',
           text: 'Error: Could not update gems',
@@ -1979,9 +1997,25 @@ export class GameScreen {
         });
       } else {
         console.log(`[DEV-PAY] ✅ Gave ${amount} gems to ${targetUsername} (new total: ${newGems})`);
-        // If target user is in the same world, update their local gems
+        // If target user is in the same world, reload their inventory to get updated gems
         if (this.player.username === targetUsername) {
-          this.player.gems = newGems;
+          const userId = this.dbSync.getCurrentUserId();
+          if (userId) {
+            // Reload inventory from database
+            const { data: updatedInventory } = await supabase
+              .from('inventories')
+              .select('*')
+              .eq('user_id', userId)
+              .single();
+            
+            if (updatedInventory) {
+              this.player.gems = updatedInventory.gems || newGems;
+              console.log(`[DEV-PAY] ✅ Updated local gems to ${this.player.gems}`);
+            } else {
+              // Fallback: just set the gems directly
+              this.player.gems = newGems;
+            }
+          }
         }
       }
     } catch (error) {
