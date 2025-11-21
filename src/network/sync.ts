@@ -264,15 +264,15 @@ export class DatabaseSync {
         .upsert({
           user_id: userId,
           items: items,
-          gems: currentInventory?.gems ?? gems ?? 0,
-          redeemed_codes: currentInventory?.redeemed_codes ?? redeemedCodes ?? [],
-          max_inventory_slots: maxInventorySlots ?? currentInventory?.max_inventory_slots ?? 8,
-          equipped_shoes: currentInventory?.equipped_shoes ?? null,
-          equipped_hat: currentInventory?.equipped_hat ?? null,
-          equipped_pants: currentInventory?.equipped_pants ?? null,
-          equipped_shirt: currentInventory?.equipped_shirt ?? null,
-          equipped_wings: currentInventory?.equipped_wings ?? null,
-          equipped_sword: currentInventory?.equipped_sword ?? null,
+          gems: gems !== undefined ? gems : (currentInventory?.gems ?? 0),
+          redeemed_codes: redeemedCodes !== undefined ? redeemedCodes : (currentInventory?.redeemed_codes ?? []),
+          max_inventory_slots: maxInventorySlots !== undefined ? maxInventorySlots : (currentInventory?.max_inventory_slots ?? 8),
+          equipped_shoes: equippedShoes !== undefined ? equippedShoes : (currentInventory?.equipped_shoes ?? null),
+          equipped_hat: equippedHat !== undefined ? equippedHat : (currentInventory?.equipped_hat ?? null),
+          equipped_pants: equippedPants !== undefined ? equippedPants : (currentInventory?.equipped_pants ?? null),
+          equipped_shirt: equippedShirt !== undefined ? equippedShirt : (currentInventory?.equipped_shirt ?? null),
+          equipped_wings: equippedWings !== undefined ? equippedWings : (currentInventory?.equipped_wings ?? null),
+          equipped_sword: equippedSword !== undefined ? equippedSword : (currentInventory?.equipped_sword ?? null),
           updated_at: new Date().toISOString()
         }, {
           onConflict: 'user_id'
