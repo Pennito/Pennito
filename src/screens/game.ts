@@ -9,7 +9,10 @@ import { TileType } from '../utils/types.js';
 import { TILE_SIZE, CANVAS_WIDTH, CANVAS_HEIGHT, WORLD_WIDTH, WORLD_HEIGHT } from '../utils/constants.js';
 import { DroppedItem } from '../entities/droppedItem.js';
 import { ShopUI, SHOP_ITEMS } from '../ui/shopUI.js';
-import { MultiplayerSync, OtherPlayer } from '../network/multiplayer.js';
+// Firebase multiplayer (faster, more reliable)
+import { MultiplayerSyncFirebase as MultiplayerSync, OtherPlayer } from '../network/multiplayer-firebase.js';
+// Supabase multiplayer (fallback - uncomment if Firebase doesn't work)
+// import { MultiplayerSync, OtherPlayer } from '../network/multiplayer.js';
 import { getSupabaseClient } from '../network/supabase.js';
 
 export class GameScreen {
@@ -415,6 +418,14 @@ export class GameScreen {
     if (!userId) {
       console.warn('[MULTIPLAYER] No user ID, skipping multiplayer init');
       return;
+    }
+
+    // Initialize Firebase first (if using Firebase)
+    try {
+      const { getFirebaseApp } = await import('../network/firebase.js');
+      await getFirebaseApp();
+    } catch (error) {
+      console.warn('[MULTIPLAYER] Firebase initialization failed, continuing with Supabase fallback:', error);
     }
 
     this.multiplayer = new MultiplayerSync(this.worldName, userId, this.username);
