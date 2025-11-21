@@ -550,6 +550,17 @@ export class MultiplayerSync {
   }
 
   public async leaveWorld(): Promise<void> {
+    // Clear position update timer and flush queue
+    if (this.positionUpdateTimer) {
+      clearTimeout(this.positionUpdateTimer);
+      this.positionUpdateTimer = null;
+    }
+    // Flush any pending position updates before leaving
+    if (this.positionUpdateQueue.length > 0) {
+      await this.flushPositionUpdates();
+    }
+    this.positionUpdateQueue = [];
+    
     // Stop broadcasting
     if (this.positionSyncInterval) {
       clearInterval(this.positionSyncInterval);
