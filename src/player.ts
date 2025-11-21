@@ -30,6 +30,7 @@ export class Player {
   public equippedPants: TileType | null = null; // Currently equipped pants
   public equippedShirt: TileType | null = null; // Currently equipped shirt
   public equippedWings: TileType | null = null; // Currently equipped wings (enables double jump)
+  public equippedSword: TileType | null = null; // Currently equipped sword (affects breaking speed and gem drops)
   public maxInventorySlots: number = INVENTORY_SLOTS; // Expandable inventory (starts at 8, max 50)
   private animationFrame: number = 0;
   private lastMoveTime: number = 0;
@@ -39,7 +40,7 @@ export class Player {
   private lastCooldownUpdate: number = 0; // Track time for cooldown updates
   private readonly DOUBLE_JUMP_COOLDOWN_MS = 500; // 0.5 seconds cooldown
 
-  constructor(x: number, y: number, username: string = 'Player') {
+  constructor(x: number, y: number, username: string = 'Player', maxSlots: number = INVENTORY_SLOTS) {
     this.x = x;
     this.y = y;
     this.velocityX = 0;
@@ -49,21 +50,44 @@ export class Player {
     this.onGround = false;
     this.selectedSlot = 0;
     this.username = username;
-    this.inventory = this.initializeInventory();
+    this.maxInventorySlots = maxSlots;
+    this.inventory = this.initializeInventory(maxSlots);
     this.lastMoveTime = Date.now();
   }
 
-  private initializeInventory(): Item[] {
-    return [
+  private initializeInventory(maxSlots: number = INVENTORY_SLOTS): Item[] {
+    const inventory: Item[] = [
       { id: 'punch', name: 'Punch', tileType: TileType.PUNCH, count: 1 }, // Always have punch
-      { id: 'wrench', name: 'Wrench', tileType: TileType.WRENCH, count: 1 }, // Always have wrench
-      { id: 'empty', name: 'Empty', tileType: TileType.AIR, count: 0 },
-      { id: 'empty2', name: 'Empty', tileType: TileType.AIR, count: 0 },
-      { id: 'empty3', name: 'Empty', tileType: TileType.AIR, count: 0 },
-      { id: 'empty4', name: 'Empty', tileType: TileType.AIR, count: 0 },
-      { id: 'empty5', name: 'Empty', tileType: TileType.AIR, count: 0 },
-      { id: 'empty6', name: 'Empty', tileType: TileType.AIR, count: 0 }
+      { id: 'wrench', name: 'Wrench', tileType: TileType.WRENCH, count: 1 } // Always have wrench
     ];
+    
+    // Fill remaining slots with empty items
+    for (let i = inventory.length; i < maxSlots; i++) {
+      inventory.push({
+        id: `empty_${i}`,
+        name: 'Empty',
+        tileType: TileType.AIR,
+        count: 0
+      });
+    }
+    
+    return inventory;
+  }
+  
+  // Ensure inventory array matches maxInventorySlots
+  public ensureInventorySize(): void {
+    while (this.inventory.length < this.maxInventorySlots) {
+      this.inventory.push({
+        id: `empty_${this.inventory.length}`,
+        name: 'Empty',
+        tileType: TileType.AIR,
+        count: 0
+      });
+    }
+    // Trim if somehow over (shouldn't happen, but safety check)
+    if (this.inventory.length > this.maxInventorySlots) {
+      this.inventory = this.inventory.slice(0, this.maxInventorySlots);
+    }
   }
 
   private prevJumpHeld: boolean = false; // whether jump key was held last frame
@@ -283,6 +307,7 @@ export class Player {
           [TileType.SUIT_SHIRT]: 'Suit Shirt',
           [TileType.RAINBOW_WINGS]: 'Rainbow Wings',
           [TileType.GEM]: 'Gem',
+          [TileType.FLAME_SWORD]: 'Flame Sword',
           [TileType.PUNCH]: 'Punch',
           [TileType.WRENCH]: 'Wrench'
         };
@@ -333,15 +358,8 @@ export class Player {
     this.gems -= cost;
     this.maxInventorySlots += 2;
     
-    // Add empty slots to inventory
-    while (this.inventory.length < this.maxInventorySlots) {
-      this.inventory.push({
-        id: 'empty',
-        name: 'Empty',
-        tileType: TileType.AIR,
-        count: 0
-      });
-    }
+    // Ensure inventory array matches new size
+    this.ensureInventorySize();
     
     return true;
   }
@@ -655,6 +673,7 @@ export class Player {
       equippedShirt: this.equippedShirt,
       equippedPants: this.equippedPants,
       equippedWings: this.equippedWings,
+      equippedSword: this.equippedSword,
       maxInventorySlots: this.maxInventorySlots,
       gems: this.gems,
       redeemedCodes: this.redeemedCodes
@@ -666,16 +685,20 @@ export class Player {
     this.y = data.y;
     this.velocityX = data.velocityX;
     this.velocityY = data.velocityY;
-    this.inventory = data.inventory.map(item => ({ ...item }));
     this.selectedSlot = data.selectedSlot;
     this.equippedShoes = data.equippedShoes || null;
     this.equippedHat = data.equippedHat || null;
     this.equippedShirt = data.equippedShirt || null;
     this.equippedPants = data.equippedPants || null;
     this.equippedWings = data.equippedWings || null;
+    this.equippedSword = data.equippedSword || null;
     this.maxInventorySlots = data.maxInventorySlots || INVENTORY_SLOTS;
     this.gems = data.gems || 0;
     this.redeemedCodes = data.redeemedCodes || [];
+    
+    // Load inventory and ensure it matches maxInventorySlots
+    this.inventory = data.inventory ? data.inventory.map(item => ({ ...item })) : this.initializeInventory(this.maxInventorySlots);
+    this.ensureInventorySize();
   }
 }
 

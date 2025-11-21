@@ -1,7 +1,7 @@
 import { TileType } from './types.js';
 
 // Game version - increment this to force automatic reset on next load
-export const GAME_VERSION = '1.0.7'; // Update this when you want to force a reset
+export const GAME_VERSION = '1.0.8'; // Updated for flame sword and inventory fix
 
 export const TILE_SIZE = 32;
 export const WORLD_WIDTH = 50;
@@ -35,6 +35,7 @@ export const TILE_HEALTH: Record<TileType, number> = {
   [TileType.SUIT_SHIRT]: 0, // Equippable shirt, not placeable
   [TileType.RAINBOW_WINGS]: 0, // Equippable wings, not placeable
   [TileType.GEM]: 0, // Gem currency item, not placeable
+  [TileType.FLAME_SWORD]: 0, // Equippable sword, not placeable
   [TileType.PUNCH]: 0, // Punch is not a tile, just an item
   [TileType.WRENCH]: 0 // Wrench is not a tile, just an item
 };
@@ -56,6 +57,7 @@ export const TILE_COLORS: Record<TileType, string> = {
   [TileType.SUIT_SHIRT]: '#FFFFFF', // White suit shirt
   [TileType.RAINBOW_WINGS]: '#FF1493', // Pink/magenta for rainbow wings
   [TileType.GEM]: '#00CED1', // Cyan for gems
+  [TileType.FLAME_SWORD]: '#FF4500', // Orange-red for flame sword
   [TileType.PUNCH]: '#FF6347', // Red color for punch
   [TileType.WRENCH]: '#C0C0C0' // Silver for wrench
 };

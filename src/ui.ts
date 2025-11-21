@@ -69,26 +69,26 @@ export class UI {
   }
 
   private updateHover(x: number, y: number): void {
-    const slotWidth = 60;
-    const slotsPerRow = 8; // Always show 8 slots per row
-    const startX = (CANVAS_WIDTH - (slotsPerRow * slotWidth)) / 2;
+    // Match the rendering layout exactly
+    const slotWidth = 56;
+    const slotHeight = 56;
+    const slotsPerRow = 8;
+    const slotSpacing = 4;
+    const startX = (CANVAS_WIDTH - (slotsPerRow * (slotWidth + slotSpacing) - slotSpacing)) / 2;
     
-    // Calculate inventory position based on expansion
-    const baseY = CANVAS_HEIGHT - 80;
-    const expandedHeight = 200; // Height when fully expanded
-    const currentY = baseY - (this.inventoryExpansionCurrent * expandedHeight);
-    const slotHeight = 60;
+    // We need maxSlots to calculate rows, but we don't have it here
+    // Use a reasonable default (will be updated when rendering)
+    const maxSlots = 50; // Max possible
+    const numRows = Math.ceil(maxSlots / slotsPerRow);
+    const totalHeight = numRows * (slotHeight + slotSpacing) - slotSpacing;
+    const baseY = CANVAS_HEIGHT - totalHeight - 20;
     
     // Check if mouse is over inventory area
-    const maxRows = Math.ceil(50 / slotsPerRow); // Max rows for 50 slots
-    const visibleRows = 1 + Math.floor(this.inventoryExpansionCurrent * (maxRows - 1)); // At least 1 row, more when expanded
-    const totalHeight = (visibleRows * slotHeight) + 20;
-    
-    if (y >= currentY && y <= currentY + totalHeight) {
-      const row = Math.floor((y - currentY) / slotHeight);
-      const col = Math.floor((x - startX) / slotWidth);
+    if (y >= baseY - 10 && y <= baseY + totalHeight + 20) {
+      const row = Math.floor((y - baseY) / (slotHeight + slotSpacing));
+      const col = Math.floor((x - startX) / (slotWidth + slotSpacing));
       
-      if (col >= 0 && col < slotsPerRow && row >= 0 && row < visibleRows) {
+      if (col >= 0 && col < slotsPerRow && row >= 0 && row < numRows) {
         const slotIndex = row * slotsPerRow + col;
         this.hoveredSlot = slotIndex;
         this.tooltipX = x;
@@ -342,6 +342,46 @@ export class UI {
         this.ctx.stroke();
         break;
 
+      case TileType.FLAME_SWORD:
+        // Flame sword with fire effect
+        // Blade (orange-red gradient)
+        const swordGradient = this.ctx.createLinearGradient(x, y, x + size, y);
+        swordGradient.addColorStop(0, '#FF4500'); // Orange-red
+        swordGradient.addColorStop(0.5, '#FF6347'); // Tomato
+        swordGradient.addColorStop(1, '#FF8C00'); // Dark orange
+        this.ctx.fillStyle = swordGradient;
+        // Blade shape (pointed)
+        this.ctx.beginPath();
+        this.ctx.moveTo(x + size * 0.5, y);
+        this.ctx.lineTo(x + size * 0.2, y + size * 0.7);
+        this.ctx.lineTo(x + size * 0.8, y + size * 0.7);
+        this.ctx.closePath();
+        this.ctx.fill();
+        // Blade highlight
+        this.ctx.fillStyle = '#FFD700';
+        this.ctx.beginPath();
+        this.ctx.moveTo(x + size * 0.5, y + size * 0.1);
+        this.ctx.lineTo(x + size * 0.35, y + size * 0.6);
+        this.ctx.lineTo(x + size * 0.65, y + size * 0.6);
+        this.ctx.closePath();
+        this.ctx.fill();
+        // Handle (dark)
+        this.ctx.fillStyle = '#654321';
+        this.ctx.fillRect(x + size * 0.4, y + size * 0.7, size * 0.2, size * 0.3);
+        // Flame particles
+        this.ctx.fillStyle = '#FF4500';
+        this.ctx.beginPath();
+        this.ctx.arc(x + size * 0.3, y + size * 0.2, size * 0.08, 0, Math.PI * 2);
+        this.ctx.fill();
+        this.ctx.beginPath();
+        this.ctx.arc(x + size * 0.7, y + size * 0.15, size * 0.06, 0, Math.PI * 2);
+        this.ctx.fill();
+        this.ctx.fillStyle = '#FFD700';
+        this.ctx.beginPath();
+        this.ctx.arc(x + size * 0.5, y + size * 0.1, size * 0.05, 0, Math.PI * 2);
+        this.ctx.fill();
+        break;
+
       default:
         // Fallback: colored square
         this.ctx.fillStyle = TILE_COLORS[tileType] || '#888';
@@ -355,99 +395,87 @@ export class UI {
   }
 
   public renderInventory(inventory: Item[], selectedSlot: number, maxSlots: number = INVENTORY_SLOTS, playerGems: number = 0, expansionCost: number = 0): void {
-    // Update animation
-    this.updateInventoryAnimation();
+    // GROWTOPIA-STYLE INVENTORY: Fixed grid, always visible, all rows shown
+    const slotWidth = 56;
+    const slotHeight = 56;
+    const slotsPerRow = 8; // Always 8 slots per row (like Growtopia)
+    const slotSpacing = 4; // Space between slots
+    const startX = (CANVAS_WIDTH - (slotsPerRow * (slotWidth + slotSpacing) - slotSpacing)) / 2;
     
-    const slotWidth = 60;
-    const slotHeight = 60;
-    const slotsPerRow = 8; // Always 8 slots per row
-    const startX = (CANVAS_WIDTH - (slotsPerRow * slotWidth)) / 2;
+    // Calculate number of rows needed
+    const numRows = Math.ceil(maxSlots / slotsPerRow);
+    const totalHeight = numRows * (slotHeight + slotSpacing) - slotSpacing;
     
-    // Calculate inventory position based on expansion
-    const baseY = CANVAS_HEIGHT - 80;
-    const maxRows = Math.ceil(maxSlots / slotsPerRow);
-    const expandedHeight = (maxRows - 1) * slotHeight; // Height to expand
-    const currentY = baseY - (this.inventoryExpansionCurrent * expandedHeight);
+    // Position inventory at bottom (like Growtopia)
+    const baseY = CANVAS_HEIGHT - totalHeight - 20;
     
-    // Calculate how many rows to show
-    const visibleRows = Math.max(1, Math.ceil(1 + this.inventoryExpansionCurrent * (maxRows - 1)));
+    // Background bar (semi-transparent, like Growtopia)
+    this.ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+    this.ctx.fillRect(0, baseY - 10, CANVAS_WIDTH, totalHeight + 30);
     
-    // Background for expanded inventory
-    if (this.inventoryExpansionCurrent > 0.1) {
-      this.ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
-      this.ctx.fillRect(0, currentY - 10, CANVAS_WIDTH, (visibleRows * slotHeight) + 20);
-    }
-
-    // Render all visible rows
-    for (let row = 0; row < visibleRows; row++) {
+    // Render all slots in grid (like Growtopia - all rows always visible)
+    for (let row = 0; row < numRows; row++) {
       for (let col = 0; col < slotsPerRow; col++) {
         const slotIndex = row * slotsPerRow + col;
         if (slotIndex >= maxSlots) break; // Don't render beyond max slots
         
-        const x = startX + col * slotWidth;
-        const y = currentY + row * slotHeight;
+        const x = startX + col * (slotWidth + slotSpacing);
+        const y = baseY + row * (slotHeight + slotSpacing);
         const item = inventory[slotIndex] || null;
 
-        // Slot background with hover effect
+        // Slot background (Growtopia style - darker gray)
         const isHovered = this.hoveredSlot === slotIndex;
         if (slotIndex === selectedSlot) {
-          this.ctx.fillStyle = '#ffff00';
-          this.ctx.fillRect(x - 2, y - 2, slotWidth + 4, slotHeight + 4);
+          // Selected slot - yellow border (like Growtopia)
+          this.ctx.fillStyle = '#2A2A2A'; // Dark background
+          this.ctx.fillRect(x, y, slotWidth, slotHeight);
+          this.ctx.strokeStyle = '#FFD700'; // Gold/yellow border
+          this.ctx.lineWidth = 3;
+          this.ctx.strokeRect(x - 1, y - 1, slotWidth + 2, slotHeight + 2);
         } else if (isHovered) {
-          this.ctx.fillStyle = '#E8EAF6';
+          // Hovered slot - lighter background
+          this.ctx.fillStyle = '#3A3A3A';
           this.ctx.fillRect(x, y, slotWidth, slotHeight);
+          this.ctx.strokeStyle = '#555';
+          this.ctx.lineWidth = 2;
+          this.ctx.strokeRect(x, y, slotWidth, slotHeight);
         } else {
-          this.ctx.fillStyle = '#F5F5F5';
+          // Normal slot
+          this.ctx.fillStyle = '#2A2A2A';
           this.ctx.fillRect(x, y, slotWidth, slotHeight);
+          this.ctx.strokeStyle = '#444';
+          this.ctx.lineWidth = 1;
+          this.ctx.strokeRect(x, y, slotWidth, slotHeight);
         }
 
-        // Slot border
-        this.ctx.strokeStyle = '#9E9E9E';
-        this.ctx.lineWidth = 2;
-        this.ctx.strokeRect(x, y, slotWidth, slotHeight);
+        // Item icon (if item exists and has count > 0)
+        if (item && item.count > 0 && item.tileType !== TileType.AIR) {
+          // Render item icon with padding
+          this.renderItemIcon(item.tileType, x + 8, y + 8, 40);
 
-        // Item icon
-        if (item && item.count > 0) {
-          this.renderItemIcon(item.tileType, x + 10, y + 10, 40);
-
-          // Count
+          // Item count (bottom-right corner, like Growtopia)
           if (item.count > 1) {
-            this.ctx.fillStyle = '#fff';
-            this.ctx.font = 'bold 14px monospace';
+            this.ctx.fillStyle = '#000';
+            this.ctx.font = 'bold 12px monospace';
             this.ctx.textAlign = 'right';
-            this.ctx.fillText(
-              item.count.toString(),
-              x + slotWidth - 4,
-              y + slotHeight - 4
-            );
+            this.ctx.textBaseline = 'bottom';
+            // Background for count text
+            const countText = item.count.toString();
+            const textWidth = this.ctx.measureText(countText).width;
+            this.ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+            this.ctx.fillRect(x + slotWidth - textWidth - 6, y + slotHeight - 16, textWidth + 4, 14);
+            // Count text
+            this.ctx.fillStyle = '#000';
+            this.ctx.fillText(countText, x + slotWidth - 4, y + slotHeight - 4);
           }
         }
-
-        // Slot number
-        this.ctx.fillStyle = '#fff';
-        this.ctx.font = '12px monospace';
-        this.ctx.textAlign = 'center';
-        this.ctx.fillText(
-          (slotIndex + 1).toString(),
-          x + slotWidth / 2,
-          y + slotHeight + 16
-        );
       }
     }
 
-    // Expand/collapse indicator
-    if (maxSlots > slotsPerRow) {
-      const indicatorY = baseY - 5;
-      this.ctx.fillStyle = this.inventoryExpanded ? '#4CAF50' : '#9E9E9E';
-      this.ctx.font = 'bold 16px monospace';
-      this.ctx.textAlign = 'center';
-      this.ctx.fillText(this.inventoryExpanded ? '▼ Click to collapse' : '▲ Click to expand', CANVAS_WIDTH / 2, indicatorY);
-    }
-
-    // Tooltip
+    // Tooltip (show item name when hovering)
     if (this.hoveredSlot >= 0 && this.hoveredSlot < inventory.length) {
       const hoveredItem = inventory[this.hoveredSlot];
-      if (hoveredItem && hoveredItem.count > 0) {
+      if (hoveredItem && hoveredItem.count > 0 && hoveredItem.tileType !== TileType.AIR) {
         this.renderTooltip(hoveredItem, this.tooltipX, this.tooltipY);
       }
     }

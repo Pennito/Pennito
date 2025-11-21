@@ -76,6 +76,15 @@ export const SHOP_ITEMS: ShopItem[] = [
     tileType: TileType.GOLD_LOCK,
     category: 'essentials',
     isEquipment: false
+  },
+  {
+    id: 'flame_sword',
+    name: 'Flame Sword',
+    description: '2x faster breaking, 1.5x more gems',
+    price: 20000,
+    tileType: TileType.FLAME_SWORD,
+    category: 'essentials',
+    isEquipment: true
   }
 ];
 
@@ -531,6 +540,46 @@ export class ShopUI {
         ctx.fillRect(x + size * 0.45, y + size * 0.6, size * 0.1, size * 0.2);
         ctx.beginPath();
         ctx.arc(x + size * 0.5, y + size * 0.65, size * 0.08, 0, Math.PI * 2);
+        ctx.fill();
+        break;
+
+      case TileType.FLAME_SWORD:
+        // Flame sword with fire effect
+        // Blade (orange-red gradient)
+        const swordGradient = ctx.createLinearGradient(x, y, x + size, y);
+        swordGradient.addColorStop(0, '#FF4500'); // Orange-red
+        swordGradient.addColorStop(0.5, '#FF6347'); // Tomato
+        swordGradient.addColorStop(1, '#FF8C00'); // Dark orange
+        ctx.fillStyle = swordGradient;
+        // Blade shape (pointed)
+        ctx.beginPath();
+        ctx.moveTo(x + size * 0.5, y);
+        ctx.lineTo(x + size * 0.2, y + size * 0.7);
+        ctx.lineTo(x + size * 0.8, y + size * 0.7);
+        ctx.closePath();
+        ctx.fill();
+        // Blade highlight
+        ctx.fillStyle = '#FFD700';
+        ctx.beginPath();
+        ctx.moveTo(x + size * 0.5, y + size * 0.1);
+        ctx.lineTo(x + size * 0.35, y + size * 0.6);
+        ctx.lineTo(x + size * 0.65, y + size * 0.6);
+        ctx.closePath();
+        ctx.fill();
+        // Handle (dark)
+        ctx.fillStyle = '#654321';
+        ctx.fillRect(x + size * 0.4, y + size * 0.7, size * 0.2, size * 0.3);
+        // Flame particles
+        ctx.fillStyle = '#FF4500';
+        ctx.beginPath();
+        ctx.arc(x + size * 0.3, y + size * 0.2, size * 0.08, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(x + size * 0.7, y + size * 0.15, size * 0.06, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#FFD700';
+        ctx.beginPath();
+        ctx.arc(x + size * 0.5, y + size * 0.1, size * 0.05, 0, Math.PI * 2);
         ctx.fill();
         break;
 

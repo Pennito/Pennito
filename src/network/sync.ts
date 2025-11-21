@@ -1,6 +1,6 @@
 import { getSupabaseClient, DatabaseUser, DatabaseWorld, DatabaseInventory } from './supabase.js';
 import { StorageManager } from '../utils/storage.js';
-import { WorldData } from '../utils/types.js';
+import { WorldData, TileType } from '../utils/types.js';
 import { Item } from '../utils/types.js';
 
 // World sync debounce - sync every 3 seconds after changes
@@ -228,7 +228,7 @@ export class DatabaseSync {
   }
 
   // Inventory management - saves items, gems, and redeemed codes
-  public async saveInventory(userId: string, items: Item[], gems?: number, redeemedCodes?: string[]): Promise<void> {
+  public async saveInventory(userId: string, items: Item[], gems?: number, redeemedCodes?: string[], maxInventorySlots?: number, equippedShoes?: TileType | null, equippedHat?: TileType | null, equippedPants?: TileType | null, equippedShirt?: TileType | null, equippedWings?: TileType | null, equippedSword?: TileType | null): Promise<void> {
     const supabase = await getSupabaseClient();
     if (!supabase) {
       console.error('[ERROR] Supabase not available - cannot save inventory');
@@ -252,12 +252,27 @@ export class DatabaseSync {
         }
       }
 
-      // Save inventory items
+      // Save inventory items (get current inventory data to preserve other fields)
+      const { data: currentInventory } = await supabase
+        .from('inventories')
+        .select('*')
+        .eq('user_id', userId)
+        .single();
+
       const { error } = await supabase
         .from('inventories')
         .upsert({
           user_id: userId,
           items: items,
+          gems: currentInventory?.gems ?? gems ?? 0,
+          redeemed_codes: currentInventory?.redeemed_codes ?? redeemedCodes ?? [],
+          max_inventory_slots: maxInventorySlots ?? currentInventory?.max_inventory_slots ?? 8,
+          equipped_shoes: currentInventory?.equipped_shoes ?? null,
+          equipped_hat: currentInventory?.equipped_hat ?? null,
+          equipped_pants: currentInventory?.equipped_pants ?? null,
+          equipped_shirt: currentInventory?.equipped_shirt ?? null,
+          equipped_wings: currentInventory?.equipped_wings ?? null,
+          equipped_sword: currentInventory?.equipped_sword ?? null,
           updated_at: new Date().toISOString()
         }, {
           onConflict: 'user_id'

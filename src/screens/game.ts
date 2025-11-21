@@ -24,7 +24,13 @@ export class GameScreen {
   private worldName: string;
   private lastTime: number = 0;
   private breakingTile: { x: number; y: number; startTime: number } | null = null;
-  private breakDuration: number = 500;
+  private getBreakDuration(): number {
+    // Flame Sword makes breaking 2x faster (half the duration)
+    if (this.player.equippedSword === TileType.FLAME_SWORD) {
+      return 250; // 500ms / 2 = 250ms
+    }
+    return 500; // Normal break duration
+  }
   private onExit: () => void;
   private isPaused: boolean = false;
   private pauseMenuSelected: number = 0;
@@ -166,7 +172,7 @@ export class GameScreen {
     }, true); // Use capture phase
     
     // Add click event handler for menu button, shop button, and shop modal
-    canvas.addEventListener('click', (e) => {
+    canvas.addEventListener('click', async (e) => {
       const rect = canvas.getBoundingClientRect();
       const x = e.clientX - rect.left;
       const y = e.clientY - rect.top;
@@ -194,6 +200,23 @@ export class GameScreen {
           if (clickedItem === 'inventory_expansion') {
             if (this.player.gems >= invExpansionCost) {
               if (this.player.expandInventory()) {
+                // Save inventory with updated maxInventorySlots
+                const userId = this.dbSync.getCurrentUserId();
+                if (userId) {
+                  await this.dbSync.saveInventory(
+                    userId,
+                    this.player.inventory,
+                    this.player.gems,
+                    this.player.redeemedCodes,
+                    this.player.maxInventorySlots,
+                    this.player.equippedShoes,
+                    this.player.equippedHat,
+                    this.player.equippedPants,
+                    this.player.equippedShirt,
+                    this.player.equippedWings,
+                    this.player.equippedSword
+                  );
+                }
                 alert(`✓ Inventory expanded to ${this.player.maxInventorySlots} slots!\n\nNext expansion: ${this.player.getInventoryExpansionCost()} gems`);
               } else {
                 alert('❌ Inventory is already at maximum size (50 slots)!');
@@ -208,6 +231,24 @@ export class GameScreen {
           if (this.player.gems >= clickedItem.price) {
             this.player.gems -= clickedItem.price;
             this.player.addToInventory(clickedItem.tileType, 1);
+            
+            // Save inventory after purchase
+            const userId = this.dbSync.getCurrentUserId();
+            if (userId) {
+              await this.dbSync.saveInventory(
+                userId,
+                this.player.inventory,
+                this.player.gems,
+                this.player.redeemedCodes,
+                this.player.maxInventorySlots,
+                this.player.equippedShoes,
+                this.player.equippedHat,
+                this.player.equippedPants,
+                this.player.equippedShirt,
+                this.player.equippedWings,
+                this.player.equippedSword
+              );
+            }
             
             if (clickedItem.isEquipment) {
               alert(`✓ ${clickedItem.name} purchased!\n\nDouble-click in inventory to equip.`);
@@ -325,7 +366,7 @@ export class GameScreen {
     this.player = new Player(spawnX, 0, username);
     
     // Load world asynchronously
-    this.loadWorld(worldName, isNew).then(() => {
+    this.loadWorld(worldName, isNew).then(async () => {
       // SPAWN AT DOOR LOCATION: Use world's spawn door coordinates
       const doorX = this.world.spawnX;
       const doorY = this.world.spawnY;
@@ -353,6 +394,9 @@ export class GameScreen {
       
       // Set camera
       this.camera.setPosition(this.player.x, this.player.y);
+      
+      // Load player inventory and equipped items from database
+      await this.loadPlayerInventory();
       
       // Initialize multiplayer sync after world loads
       this.initializeMultiplayer();
@@ -470,6 +514,93 @@ export class GameScreen {
         this.world = new World(WORLD_WIDTH, WORLD_HEIGHT);
         this.saveWorld();
       }
+    }
+  }
+
+  private async loadPlayerInventory(): Promise<void> {
+    const userId = this.dbSync.getCurrentUserId();
+    if (!userId) {
+      console.warn('[INVENTORY] No user ID, skipping inventory load');
+      return;
+    }
+
+    try {
+      const { getSupabaseClient } = await import('../network/supabase.js');
+      const supabase = await getSupabaseClient();
+      if (!supabase) {
+        console.warn('[INVENTORY] Supabase not available');
+        return;
+      }
+
+      // Load inventory data from database
+      const { data: inventoryData, error } = await supabase
+        .from('inventories')
+        .select('*')
+        .eq('user_id', userId)
+        .single();
+
+      if (error && error.code !== 'PGRST116') { // PGRST116 = not found
+        console.error('[INVENTORY] Error loading inventory:', error);
+        return;
+      }
+
+      if (inventoryData) {
+        // Update player with loaded data
+        if (inventoryData.items) {
+          this.player.inventory = inventoryData.items;
+        }
+        if (inventoryData.gems !== undefined && inventoryData.gems !== null) {
+          this.player.gems = inventoryData.gems;
+        }
+        if (inventoryData.max_inventory_slots) {
+          this.player.maxInventorySlots = inventoryData.max_inventory_slots;
+        }
+        if (inventoryData.equipped_shoes !== undefined) {
+          this.player.equippedShoes = inventoryData.equipped_shoes;
+        }
+        if (inventoryData.equipped_hat !== undefined) {
+          this.player.equippedHat = inventoryData.equipped_hat;
+        }
+        if (inventoryData.equipped_pants !== undefined) {
+          this.player.equippedPants = inventoryData.equipped_pants;
+        }
+        if (inventoryData.equipped_shirt !== undefined) {
+          this.player.equippedShirt = inventoryData.equipped_shirt;
+        }
+        if (inventoryData.equipped_wings !== undefined) {
+          this.player.equippedWings = inventoryData.equipped_wings;
+        }
+        if (inventoryData.equipped_sword !== undefined) {
+          this.player.equippedSword = inventoryData.equipped_sword;
+        }
+        if (inventoryData.redeemed_codes) {
+          this.player.redeemedCodes = inventoryData.redeemed_codes;
+        }
+
+        // Ensure inventory size matches maxInventorySlots
+        this.player.ensureInventorySize();
+        
+        console.log(`[INVENTORY] Loaded: ${this.player.inventory.length} items, ${this.player.maxInventorySlots} max slots, ${this.player.gems} gems`);
+      } else {
+        // No inventory found - initialize with defaults
+        this.player.ensureInventorySize();
+        // Save initial inventory
+        await this.dbSync.saveInventory(
+          userId,
+          this.player.inventory,
+          this.player.gems,
+          this.player.redeemedCodes,
+          this.player.maxInventorySlots,
+          this.player.equippedShoes,
+          this.player.equippedHat,
+          this.player.equippedPants,
+          this.player.equippedShirt,
+          this.player.equippedWings,
+          this.player.equippedSword
+        );
+      }
+    } catch (error) {
+      console.error('[INVENTORY] Error loading player inventory:', error);
     }
   }
 
@@ -647,7 +778,8 @@ export class GameScreen {
           }
           
           const breakTime = Date.now() - this.breakingTile.startTime;
-          if (breakTime >= this.breakDuration) {
+          const breakDuration = this.getBreakDuration();
+          if (breakTime >= breakDuration) {
             // Save the tile type before breaking it
             const brokenTileType = tile.type;
             const broken = this.world.damageTile(mouseTile.x, mouseTile.y, tile.maxHealth);
@@ -676,8 +808,12 @@ export class GameScreen {
                 this.multiplayer.broadcastDroppedItem(dropX, dropY, brokenTileType).catch(console.error);
               }
               
-              // Drop 1-5 gems randomly when breaking any block
-              const gemCount = Math.floor(Math.random() * 5) + 1; // 1-5 gems
+              // Drop gems - 1.5x more with Flame Sword
+              let baseGemCount = Math.floor(Math.random() * 5) + 1; // 1-5 gems base
+              if (this.player.equippedSword === TileType.FLAME_SWORD) {
+                baseGemCount = Math.floor(baseGemCount * 1.5); // 1.5x multiplier
+              }
+              const gemCount = Math.max(1, baseGemCount); // At least 1 gem
               const gemX = dropX + (Math.random() - 0.5) * 20; // Slight random offset
               const gemY = dropY + (Math.random() - 0.5) * 20;
               this.droppedItems.push(new DroppedItem(gemX, gemY, TileType.GEM, gemCount));
@@ -1045,7 +1181,8 @@ export class GameScreen {
       const tile = this.world.getTile(this.breakingTile.x, this.breakingTile.y);
       if (tile && tile.type !== TileType.AIR) {
         const breakTime = Date.now() - this.breakingTile.startTime;
-        const progress = Math.min(breakTime / this.breakDuration, 1);
+        const breakDuration = this.getBreakDuration();
+        const progress = Math.min(breakTime / breakDuration, 1);
         const screenX = this.breakingTile.x * TILE_SIZE - this.camera.x;
         const screenY = this.breakingTile.y * TILE_SIZE - this.camera.y;
         
@@ -1151,34 +1288,22 @@ export class GameScreen {
       }
     }
     
-    // Check for expand/collapse button click FIRST (before slot clicks)
-    if (this.ui.checkExpandButtonClick(x, y, this.player.maxInventorySlots)) {
-      this.ui.toggleInventoryExpansion();
-      return; // Consume click - don't process slot selection
-    }
-    
-    // Handle inventory slot clicks - clicking selects the item, double-clicking equips equipment
-    const inventoryY = CANVAS_HEIGHT - 80;
-    const slotWidth = 60;
+    // Handle inventory slot clicks - GROWTOPIA STYLE: Fixed grid, all rows always visible
+    const slotWidth = 56;
+    const slotHeight = 56;
     const slotsPerRow = 8;
-    const startX = (CANVAS_WIDTH - (slotsPerRow * slotWidth)) / 2;
-    const baseY = CANVAS_HEIGHT - 80;
-    const expandedHeight = Math.ceil(this.player.maxInventorySlots / slotsPerRow) * 60;
-    const expansion = this.ui.isInventoryExpanded() ? 1 : 0;
-    const currentY = baseY - (expansion * expandedHeight);
+    const slotSpacing = 4;
+    const startX = (CANVAS_WIDTH - (slotsPerRow * (slotWidth + slotSpacing) - slotSpacing)) / 2;
+    const numRows = Math.ceil(this.player.maxInventorySlots / slotsPerRow);
+    const totalHeight = numRows * (slotHeight + slotSpacing) - slotSpacing;
+    const baseY = CANVAS_HEIGHT - totalHeight - 20;
     
-    // Check if click is in inventory slot area (exclude expand button area)
-    const maxRows = Math.ceil(this.player.maxInventorySlots / slotsPerRow);
-    const visibleRows = Math.max(1, Math.ceil(1 + expansion * (maxRows - 1)));
-    const slotAreaHeight = visibleRows * 60; // Only slot area, not expand button
-    const expandButtonY = baseY - 5; // Expand button is above slots
-    
-    // Only process slot clicks if not clicking on expand button area
-    if (y >= currentY && y <= currentY + slotAreaHeight && y < expandButtonY - 10) {
-      const row = Math.floor((y - currentY) / 60);
-      const col = Math.floor((x - startX) / slotWidth);
+    // Check if click is in inventory area
+    if (y >= baseY - 10 && y <= baseY + totalHeight + 20) {
+      const row = Math.floor((y - baseY) / (slotHeight + slotSpacing));
+      const col = Math.floor((x - startX) / (slotWidth + slotSpacing));
       
-      if (col >= 0 && col < slotsPerRow && row >= 0 && row < visibleRows) {
+      if (col >= 0 && col < slotsPerRow && row >= 0 && row < numRows) {
         const slotIndex = row * slotsPerRow + col;
         if (slotIndex >= 0 && slotIndex < this.player.maxInventorySlots) {
           const now = Date.now();
@@ -1233,6 +1358,14 @@ export class GameScreen {
                 } else {
                   this.player.equippedWings = TileType.RAINBOW_WINGS;
                   console.log('[EQUIP] Equipped Rainbow Wings - Double jump enabled!');
+                }
+              } else if (item.tileType === TileType.FLAME_SWORD) {
+                if (this.player.equippedSword === TileType.FLAME_SWORD) {
+                  this.player.equippedSword = null;
+                  console.log('[EQUIP] Unequipped Flame Sword');
+                } else {
+                  this.player.equippedSword = TileType.FLAME_SWORD;
+                  console.log('[EQUIP] Equipped Flame Sword - 2x faster breaking, 1.5x more gems!');
                 }
               }
               // Reset click tracking after successful equip

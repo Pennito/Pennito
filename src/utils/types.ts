@@ -15,6 +15,7 @@ export enum TileType {
   SUIT_SHIRT = 13, // Suit shirt (equipable)
   RAINBOW_WINGS = 14, // Rainbow wings (equipable, enables double jump)
   GEM = 15, // Gem currency item (dropped when breaking blocks)
+  FLAME_SWORD = 16, // Flame sword - 2x faster breaking, 1.5x more gems
   PUNCH = 99, // Special item for breaking blocks
   WRENCH = 98 // Special item for editing signs
 }
@@ -47,6 +48,7 @@ export interface PlayerData {
   equippedShirt?: TileType | null; // Currently equipped shirt
   equippedPants?: TileType | null; // Currently equipped pants
   equippedWings?: TileType | null; // Currently equipped wings (enables double jump)
+  equippedSword?: TileType | null; // Currently equipped sword (affects breaking speed and gem drops)
   maxInventorySlots?: number; // Expandable inventory slots
   gems?: number; // Player's gem currency
   username?: string; // Player username (for multiplayer)
