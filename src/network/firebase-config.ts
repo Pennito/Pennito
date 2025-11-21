@@ -1,22 +1,14 @@
 // Firebase Configuration
-// Replace these values with your Firebase project config from Firebase Console
-// Get them from: Firebase Console → Project Settings → Your apps → Web app
+// Your Firebase project config for pennito-70ae8
 
 export const firebaseConfig = {
-  apiKey: "YOUR_API_KEY_HERE",
-  authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
-  databaseURL: "https://YOUR_PROJECT_ID-default-rtdb.firebaseio.com/",
-  projectId: "YOUR_PROJECT_ID",
-  storageBucket: "YOUR_PROJECT_ID.appspot.com",
-  messagingSenderId: "YOUR_SENDER_ID",
-  appId: "YOUR_APP_ID"
+  apiKey: "AIzaSyCqWkhOGlmUvTyS4N37DXZGs9itu_m8c5E",
+  authDomain: "pennito-70ae8.firebaseapp.com",
+  databaseURL: "https://pennito-70ae8-default-rtdb.europe-west1.firebasedatabase.app",
+  projectId: "pennito-70ae8",
+  storageBucket: "pennito-70ae8.firebasestorage.app",
+  messagingSenderId: "740575444340",
+  appId: "1:740575444340:web:76b27e39f1700e498b4021"
+  // Note: measurementId is for Analytics, not needed for Realtime Database
 };
-
-// Instructions:
-// 1. Go to https://console.firebase.google.com
-// 2. Select your project
-// 3. Go to Project Settings (gear icon)
-// 4. Scroll to "Your apps" → Web app
-// 5. Copy the config values and paste them above
-// 6. Replace YOUR_* placeholders with actual values
 
