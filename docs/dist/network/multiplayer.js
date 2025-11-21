@@ -114,14 +114,15 @@ export class MultiplayerSync {
         this.realtimeSubscription = channel;
     }
     startPollingFallback() {
-        // Poll for player updates every 1 second as a fallback if Realtime is slow
+        // Poll for player updates every 2 seconds as a fallback if Realtime is slow
         // This ensures we catch players leaving even if Realtime doesn't fire
+        // Reduced frequency to avoid overload
         if (this.pollingInterval) {
             clearInterval(this.pollingInterval);
         }
         this.pollingInterval = window.setInterval(() => {
             this.fetchCurrentPlayers();
-        }, 1000);
+        }, 2000); // Poll every 2 seconds instead of 1
     }
     async fetchCurrentPlayers() {
         if (!this.supabase)
@@ -142,12 +143,13 @@ export class MultiplayerSync {
                 data.forEach((player) => {
                     if (player.user_id !== this.userId) {
                         currentPlayerIds.add(player.user_id);
-                        // Check if player's last_seen is recent (within last 5 seconds)
-                        const lastSeen = player.last_seen ? new Date(player.last_seen).getTime() : 0;
+                        // Check if player's last_seen is recent (within last 15 seconds) - more lenient
+                        const lastSeen = player.last_seen ? new Date(player.last_seen).getTime() : Date.now();
                         const now = Date.now();
                         const timeSinceLastSeen = now - lastSeen;
-                        // Only add/update if player was seen recently (within 5 seconds)
-                        if (timeSinceLastSeen < 5000) {
+                        // Only add/update if player was seen recently (within 15 seconds)
+                        if (timeSinceLastSeen < 15000) {
+                            // Use the actual last_seen timestamp, not current time, to prevent premature removal
                             this.otherPlayers.set(player.user_id, {
                                 userId: player.user_id,
                                 username: player.username,
@@ -158,7 +160,7 @@ export class MultiplayerSync {
                                 equippedPants: player.equipped_pants,
                                 equippedShoes: player.equipped_shoes,
                                 equippedWings: player.equipped_wings,
-                                lastUpdate: Date.now()
+                                lastUpdate: lastSeen // Use actual last_seen timestamp from database
                             });
                         }
                         else {
@@ -195,6 +197,7 @@ export class MultiplayerSync {
         if (eventType === 'DELETE') {
             // Player left
             if (oldData && oldData.user_id !== this.userId) {
+                console.log(`[MULTIPLAYER] 🚪 Player ${oldData.username} left (DELETE event)`);
                 this.otherPlayers.delete(oldData.user_id);
                 this.notifyPlayersUpdate();
             }
@@ -202,6 +205,8 @@ export class MultiplayerSync {
         else if (eventType === 'INSERT' || eventType === 'UPDATE') {
             // Player joined or updated
             if (newData && newData.user_id !== this.userId) {
+                // Use last_seen timestamp if available, otherwise use current time
+                const lastSeen = newData.last_seen ? new Date(newData.last_seen).getTime() : Date.now();
                 this.otherPlayers.set(newData.user_id, {
                     userId: newData.user_id,
                     username: newData.username,
@@ -212,7 +217,7 @@ export class MultiplayerSync {
                     equippedPants: newData.equipped_pants,
                     equippedShoes: newData.equipped_shoes,
                     equippedWings: newData.equipped_wings,
-                    lastUpdate: Date.now()
+                    lastUpdate: lastSeen // Use actual last_seen from database
                 });
                 this.notifyPlayersUpdate();
             }
@@ -403,9 +408,9 @@ export class MultiplayerSync {
         this.worldChannel.subscribe();
     }
     getOtherPlayers() {
-        // Remove players that haven't updated in 2 seconds (disconnected) - more aggressive
+        // Remove players that haven't updated in 10 seconds (disconnected) - more lenient
         const now = Date.now();
-        const timeout = 2000; // Reduced to 2s for faster cleanup
+        const timeout = 10000; // Increased to 10s to prevent premature removal
         let removedAny = false;
         for (const [userId, player] of this.otherPlayers.entries()) {
             if (now - player.lastUpdate > timeout) {

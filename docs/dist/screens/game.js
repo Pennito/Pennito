@@ -1743,11 +1743,21 @@ export class GameScreen {
                             .single();
                         if (updatedInventory) {
                             this.player.gems = updatedInventory.gems || newGems;
-                            console.log(`[DEV-PAY] ✅ Updated local gems to ${this.player.gems}`);
+                            // Also update inventory items if they exist
+                            if (updatedInventory.items) {
+                                this.player.inventory = updatedInventory.items;
+                            }
+                            if (updatedInventory.max_inventory_slots) {
+                                this.player.maxInventorySlots = updatedInventory.max_inventory_slots;
+                            }
+                            // Save inventory (gems are already updated in database)
+                            await this.dbSync.saveInventory(userId, this.player.inventory, this.player.gems, this.player.redeemedCodes);
+                            console.log(`[DEV-PAY] ✅ Updated local gems to ${this.player.gems} and synced to database`);
                         }
                         else {
-                            // Fallback: just set the gems directly
+                            // Fallback: just set the gems directly and save
                             this.player.gems = newGems;
+                            await this.dbSync.saveInventory(userId, this.player.inventory, this.player.gems, this.player.redeemedCodes);
                         }
                     }
                 }
